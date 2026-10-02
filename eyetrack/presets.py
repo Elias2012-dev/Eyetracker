@@ -101,7 +101,9 @@ PRESETS: dict[str, GamePreset] = {p.key: p for p in (
              "our bridge and something else is wrong; 'none' means it did not."),
     _trackir("fs22", "Farming Simulator 22",
              "In game: Options -> General -> enable head tracking (TrackIR).",
-             "Same GIANTS engine as FS25, so the same log.txt check applies."),
+             "Same GIANTS engine as FS25, so the same log.txt check applies.",
+             "If log.txt says 'none' on a 32-bit install, our shipped DLLs are",
+             "64-bit only - see bridge/NOTICE.txt."),
     GamePreset(
         key="mouse",
         title="Any mouse-look game (no TrackIR needed)",

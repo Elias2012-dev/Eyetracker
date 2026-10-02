@@ -27,3 +27,16 @@ Building
   build.bat          (downloads TinyCC on first run - see the script)
 
 Rebuild is only needed if you change src/*.c; prebuilt DLLs are committed.
+
+Architecture: 64-bit only
+-------------------------
+Both shipped DLLs are x64, including the one named NPClient.dll: build.bat
+compiles a single 64-bit DLL and copies it to both names, because the
+bundled TinyCC is a win64 build with no 32-bit target.  The two filenames
+exist so a game probing either name finds a loadable DLL.
+
+That is fine for 64-bit games (ETS2, ATS, MSFS, DCS, FS25 - which requires
+64-bit Windows).  A genuinely 32-bit game will not load NPClient.dll, and
+there is no 32-bit build to fall back on.  If a game reports "no head
+tracking" in its log, check its bitness first; building a real 32-bit
+variant needs a 32-bit compiler and is not currently done.

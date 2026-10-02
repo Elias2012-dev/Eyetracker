@@ -160,6 +160,10 @@ system the engine actually selected. `TrackIR Client` means the engine saw
 our bridge and the problem is in-game settings; `none` means it didn't find
 it, so check the tracker was started first.
 
+Our bridge DLLs are 64-bit only, which covers FS25 (64-bit only) and every
+other game in the table above. A genuinely 32-bit game won't load them —
+see [bridge/NOTICE.txt](bridge/NOTICE.txt).
+
 **Any other TrackIR game works too** — our DLL *is* a normal NPClient: it
 answers the same registry lookup, exports and checksum the TrackIR client
 software would, so every title on the TrackIR supported list (780+ games)

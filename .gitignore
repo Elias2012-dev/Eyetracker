@@ -9,6 +9,7 @@ out/
 *.log
 eyetrack.json
 bridge_registry_backup.json
+calibration.json
 
 # Minecraft mod dev client data
 minecraft-mod/run/
