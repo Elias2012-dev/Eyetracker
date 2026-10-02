@@ -15,7 +15,8 @@ DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "eyetrack.json"
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="eyetrack",
-        description="Free webcam head-tracking for Minecraft, ETS2 and ATS.",
+        description="Free webcam head-tracking for Minecraft, TrackIR games "
+                    "and mouse-look games.",
     )
     p.add_argument("--config", type=Path, default=DEFAULT_CONFIG,
                    help=f"config file (default: {DEFAULT_CONFIG.name})")
@@ -31,9 +32,20 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--udp-host", help="Minecraft UDP output host")
     p.add_argument("--no-udp", action="store_true", help="disable the UDP JSON output")
     p.add_argument("--game-link", dest="game_link", action="store_true", default=None,
-                   help="enable the built-in game link for ETS2/ATS (default on Windows)")
+                   help="enable the built-in game link for TrackIR games "
+                        "(ETS2/ATS/DCS/MSFS/... - default on Windows)")
     p.add_argument("--no-game-link", dest="game_link", action="store_false", default=None,
-                   help="disable the ETS2/ATS game link")
+                   help="disable the TrackIR game link")
+    p.add_argument("--mouse", dest="mouse", action="store_true", default=None,
+                   help="move the mouse with your head - works with any game "
+                        "that has no TrackIR support (F9 arms/disarms)")
+    p.add_argument("--no-mouse", dest="mouse", action="store_false", default=None,
+                   help="disable the mouse-emulation output")
+    p.add_argument("--game", metavar="KEY", type=str,
+                   help="apply a game preset and print its setup notes "
+                        "(see --list-games)")
+    p.add_argument("--list-games", action="store_true",
+                   help="list the built-in game support and exit")
     p.add_argument("--no-auto-bridge", dest="auto_bridge", action="store_false", default=None,
                    help="do not auto-register the registry bridge on startup")
     p.add_argument("--freetrack", action="store_true", help=argparse.SUPPRESS)  # old alias
@@ -66,11 +78,21 @@ def main(argv: list[str] | None = None) -> int:
         from .app import list_cameras
         list_cameras()
         return 0
+    if args.list_games:
+        from .presets import print_catalog
+        print_catalog()
+        return 0
 
     cfg = Config.load(args.config)
 
     # CLI overrides (persisted so the next run keeps them).
     changed = False
+    if args.game is not None:
+        from .presets import apply_preset
+        preset = apply_preset(args.game, cfg)
+        print(f"[eyetrack] game preset: {preset.title}")
+        for note in preset.notes:
+            print(f"  - {note}")
     if args.camera is not None:
         cfg.camera.index, changed = args.camera, True
     if args.camera_name is not None:
@@ -91,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
         cfg.udp_json.enabled, changed = False, True
     if args.game_link is not None:
         cfg.game_link.enabled, changed = args.game_link, True
+    if args.mouse is not None:
+        cfg.mouse.enabled, changed = args.mouse, True
     if args.auto_bridge is not None:
         cfg.game_link.auto_bridge, changed = args.auto_bridge, True
     if args.freetrack:

@@ -1,18 +1,20 @@
 # Freebuff EyeTrack
 
 Free head/eye tracking for your webcam — no TrackIR, no Tobii, no opentrack,
-no FreeTrack. One tracker feeds three targets:
+no FreeTrack. One tracker feeds every game:
 
 | Target | How it connects |
 |---|---|
 | **Minecraft 26.2** (Fabric mod in this repo) | UDP JSON packets on `127.0.0.1:47777` |
-| **Euro Truck Simulator 2 / American Truck Simulator** | **Built-in game link** — our own NPClient DLL + shared memory, registered automatically |
+| **Any TrackIR game** — ETS2/ATS, MSFS, DCS, X-Plane 12, War Thunder, ACC, DayZ, IL-2, … | **Built-in game link** — our own NPClient DLL + shared memory, registered automatically |
+| **Any mouse-look game** (no TrackIR support required) | **Mouse emulation** — your head drives the cursor (`F9` arms/disarms) |
 | **Anything opentrack supports** (optional extra) | opentrack "UDP over network" protocol on port `4242` |
 
 ```
                        ┌── UDP JSON :47777 ──────► Minecraft mod (camera control)
- webcam ─► tracker ────┼── game link ────────────► ETS2 / ATS (our own NPClient.dll)
- (MediaPipe)           └── opentrack UDP :4242 ──► opentrack (optional)
+ webcam ─► tracker ────┼── game link ────────────► TrackIR games (our own NPClient.dll)
+ (MediaPipe)           ├── mouse ────────────────► any mouse-look game (SendInput)
+                       └── opentrack UDP :4242 ──► opentrack (optional)
 ```
 
 The tracker estimates **head pose** (yaw / pitch / roll + translation) from a
@@ -20,6 +22,36 @@ single webcam — physical or a phone used as a Windows virtual camera — using
 MediaPipe's face landmarker, smooths it with a One-Euro filter, applies your
 calibration, and streams it out. Eyes-only gaze can be layered on later —
 the pipeline and protocol already carry everything needed.
+
+---
+
+## Game support
+
+One tracker, every game. `run.bat --list-games` shows the built-in presets;
+`run.bat --game KEY` switches the outputs a game needs on (persisted) and
+prints that game's setup notes.
+
+| Game | `--game` key | How it connects |
+|---|---|---|
+| Minecraft 26.2 | `minecraft` | Fabric mod in this repo (UDP JSON) |
+| Euro Truck Simulator 2 | `ets2` | built-in game link (TrackIR API) |
+| American Truck Simulator | `ats` | built-in game link (TrackIR API) |
+| Microsoft Flight Simulator 2024 / 2020 | `msfs` | built-in game link (TrackIR API) |
+| DCS World | `dcs` | built-in game link (TrackIR API) |
+| X-Plane 12 | `xplane` | built-in game link (*Settings → VR and Head Tracking → Enable TrackIR*) |
+| War Thunder | `war-thunder` | built-in game link (TrackIR API) |
+| IL-2 Sturmovik | `il2` | built-in game link (TrackIR API) |
+| Assetto Corsa Competizione | `acc` | built-in game link (TrackIR API) |
+| DayZ | `dayz` | built-in game link (TrackIR API) |
+| **anything with mouse-look** | `mouse` | mouse emulation (head moves the cursor) |
+
+**Any other TrackIR game works too** — our DLL *is* a normal NPClient: it
+answers the same registry lookup, exports and checksum the TrackIR client
+software would, so every title on the TrackIR supported list (780+ games)
+can load it. Start the tracker first, enable head tracking in the game, done.
+
+Games without TrackIR support are covered by **mouse emulation** — see
+[Any other game — mouse emulation](#any-other-game--mouse-emulation).
 
 ---
 
@@ -97,7 +129,8 @@ Phone streams are often 720p30 — that's plenty; the tracker just asks for
 Everything needed is already inside this repository: the tracker ships its
 **own** 6.5 KB `NPClient.dll` (built from [bridge/src](bridge/src)) that the
 games load, fed by the tracker's shared memory. No FreeTrack, no opentrack,
-no extra software.
+no extra software. Every TrackIR game in the table above is served exactly
+this same way.
 
 1. Start the tracker **before** launching the game:
 
@@ -132,6 +165,29 @@ run.bat --opentrack
 then in opentrack set *Input → UDP over network* (port 4242) and pick any
 output you like.
 
+## Any other game — mouse emulation
+
+Games without TrackIR support (most of the library) can be driven too: the
+tracker **moves your mouse**.
+
+```
+run.bat --mouse          # enable it (saved to eyetrack.json)
+run.bat --game mouse     # same, plus the per-game setup notes
+```
+
+* Yaw/pitch become *relative* cursor motion via Windows `SendInput` —
+  exactly what a physical mouse does, no driver or extra software.
+* It **starts disarmed** so your desktop stays usable: press **F9** to
+  arm/disarm (`mouse.toggle_key`). The overlay status line always shows
+  `mouse: ON/off [F9]`.
+* Holding a head pose stops the cursor, returning to centre returns the
+  cursor — no drift; sub-pixel motion is never rounded away.
+* Speed and feel: `mouse.sensitivity` / `mouse.v_sensitivity` (pixels per
+  degree, default `5`), `mouse.deadzone_deg` (default `2°` — swallows idle
+  jitter), `mouse.invert_x` / `mouse.invert_y`.
+* Windowed / borderless-fullscreen is the most reliable mode, and lowering
+  the game's own mouse sensitivity tames fast games.
+
 ---
 
 ## Tracker keys (overlay window)
@@ -141,6 +197,7 @@ output you like.
 | `C` | start the calibration wizard (SPACE captures, ESC cancels) |
 | `R` | recentre on your current neutral pose |
 | `Q` / `ESC` | quit |
+| `F9` | arm/disarm the mouse output (global; only when `mouse.enabled`) |
 
 ## Configuration files
 
@@ -156,8 +213,14 @@ output you like.
 | `pose.reference_distance_cm` | `60` | seated distance used for depth (Z) |
 | `filter.min_cutoff` / `beta` | `1.0` / `0.03` | One-Euro smoothing (lower = smoother, beta = speed response) |
 | `udp_json.enabled/host/port` | `true` / `127.0.0.1` / `47777` | Minecraft stream |
-| `game_link.enabled` | `true` on Windows | ETS2/ATS game link (our NPClient DLL) |
+| `game_link.enabled` | `true` on Windows | TrackIR game link (our NPClient DLL) |
 | `game_link.auto_bridge` | `true` | auto-register the registry bridge at startup |
+| `mouse.enabled` | `false` | mouse-emulation output for non-TrackIR games |
+| `mouse.sensitivity` / `v_sensitivity` | `5.0` | mouse pixels per degree (yaw / pitch) |
+| `mouse.deadzone_deg` | `2.0` | ignore head jitter around the neutral pose |
+| `mouse.invert_x` / `mouse.invert_y` | `false` | flip the mouse axes |
+| `mouse.toggle_key` | `"F9"` | arm/disarm key (`"none"` = always active) |
+| `mouse.rate_hz` | `60` | mouse output rate |
 | `opentrack_udp.enabled` | `false` | optional opentrack stream |
 | `overlay.enabled` | `true` | preview window |
 
@@ -178,8 +241,13 @@ to return to heuristic defaults.
 ## Troubleshooting
 
 * **Axes feel inverted** — tracker side: set `pose.invert_yaw`/`invert_pitch`;
-  mod side: `invertYaw`/`invertPitch`; trucks: the game has its own axis
-  inversion options.
+  mod side: `invertYaw`/`invertPitch`; mouse: `mouse.invert_x`/`invert_y`;
+  trucks: the game has its own axis inversion options.
+* **Mouse doesn't move** — the mouse output starts *disarmed*: press `F9`
+  (overlay shows `mouse: ON/off`). Then check `mouse.enabled` is `true`
+  (`run.bat --mouse`) and that the game runs windowed/borderless.
+* **Mouse too fast / too slow** — `mouse.sensitivity` and the game's own
+  mouse sensitivity; `mouse.deadzone_deg` up stops idle drift at centre.
 * **ETS2/ATS show no tracking** — start the tracker before the game; check
   the console for `[game-link]` lines (first run should say it registered
   the bridge). If you also use opentrack, *its* NPClient registration wins
@@ -201,8 +269,9 @@ to return to heuristic defaults.
 ## Development
 
 ```
-# tracker tests (23 tests: filters, calibration, UDP formats, shared memory,
-# and a full writer -> bridge DLL roundtrip incl. ABI checksum verification)
+# tracker tests (46 tests: filters, calibration, UDP formats, shared memory,
+# mouse mapping, game presets, and a full writer -> bridge DLL roundtrip
+# incl. ABI checksum verification)
 .venv/Scripts/python -m pytest
 
 # mod tests + build (3 protocol tests + compile against MC 26.2)

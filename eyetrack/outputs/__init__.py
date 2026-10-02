@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from ..config import Config
 from .game_link import GameLinkOutput
+from .mouse import MouseOutput
 from .opentrack_udp import OpentrackUdpOutput
 from .udp_json import UdpJsonOutput
 
-__all__ = ["GameLinkOutput", "OpentrackUdpOutput", "UdpJsonOutput", "build_outputs"]
+__all__ = ["GameLinkOutput", "MouseOutput", "OpentrackUdpOutput", "UdpJsonOutput",
+           "build_outputs"]
 
 
 def build_outputs(cfg: Config) -> list:
@@ -20,4 +22,6 @@ def build_outputs(cfg: Config) -> list:
     if cfg.opentrack_udp.enabled:
         outputs.append(OpentrackUdpOutput(cfg.opentrack_udp.host, cfg.opentrack_udp.port,
                                           cfg.opentrack_udp.rate_hz))
+    if cfg.mouse.enabled:
+        outputs.append(MouseOutput(cfg.mouse))
     return outputs

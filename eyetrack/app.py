@@ -99,6 +99,8 @@ def run(cfg: Config, *, config_path: Path, start_wizard: bool = False,
         out.start()
         print(f"[eyetrack] output enabled: {out.name}")
 
+    mouse_out = next((o for o in outputs if o.name == "mouse"), None)
+
     overlay = Overlay(cfg.overlay.window, cfg.overlay.show_mesh) if cfg.overlay.enabled else None
     wizard = CalibrationWizard(cfg.pose.yaw_range, cfg.pose.pitch_range,
                                cfg.pose.reference_distance_cm) if start_wizard else None
@@ -150,8 +152,11 @@ def run(cfg: Config, *, config_path: Path, start_wizard: bool = False,
                 out.send(last_out, tracking, t)
 
             if overlay is not None and frame is not None:
+                status_line = status
+                if mouse_out is not None:
+                    status_line += "   " + mouse_out.status_text()
                 key = overlay.draw(frame, pose, last_out, tracking, fps_ema,
-                                   cfg.camera.mirror, wizard, status)
+                                   cfg.camera.mirror, wizard, status_line)
                 status = HELP_STATUS
                 if overlay.window_closed() or key in (ord("q"), 27):
                     break
