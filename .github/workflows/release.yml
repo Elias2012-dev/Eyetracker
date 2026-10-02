@@ -1,0 +1,159 @@
+name: Release
+
+# Builds the exe and the mod jar and attaches them to a GitHub Release.
+# Triggered by pushing a v* tag, so the published assets are always built
+# from the exact commit the tag names.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish (e.g. v1.2.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write   # to create the release and upload assets
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Pin to the tag, not the branch: a tag push must build that tag's
+          # commit even when main has moved on.
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Work out which tag we are releasing
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.inputs.tag || github.ref_name }}".Trim()
+          if (-not $tag) { throw "no tag to release" }
+          if ($tag -eq "" -or $tag -eq $null) { throw "no tag to release" }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "name=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "Releasing $tag"
+
+      # --- the tracker exe -------------------------------------------
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Fetch the MediaPipe face model
+        # models/*.task is gitignored, so a clean runner has no model and the
+        # PyInstaller spec now aborts without it. Fetch it the same way the
+        # app itself does on first run.
+        run: |
+          python -c "from eyetrack.pose import MODEL_URL; import urllib.request, pathlib; p = pathlib.Path('models'); p.mkdir(exist_ok=True); urllib.request.urlretrieve(MODEL_URL, p / 'face_landmarker.task')"
+          python -c "import pathlib; m = pathlib.Path('models/face_landmarker.task'); print('model bytes:', m.stat().st_size); assert m.stat().st_size > 1000000, 'model looks truncated'"
+
+      - name: Build the exe
+        shell: pwsh
+        run: .\build_exe.bat
+
+      - name: Smoke-test the exe
+        shell: pwsh
+        run: |
+          $env:EYE_TRACKER_NO_DIALOG = "1"
+          # --paths touches nothing but the filesystem: it proves the bundle
+          # unpacks and imports without needing a camera or a display.
+          .\dist\Eyetracker.exe --paths
+          if ($LASTEXITCODE -ne 0) { throw "exe --paths failed" }
+          # The model must be inside the bundle, not merely present next to it.
+          if (-not (Select-String -Path .\dist\Eyetracker.exe -Pattern "face_landmarker.task" -SimpleMatch -Quiet)) {
+            throw "the built exe does not contain the face model"
+          }
+          Write-Host "exe smoke test passed"
+
+      # --- the Minecraft mod jar --------------------------------------
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the mod jar
+        working-directory: minecraft-mod
+        # The .\ prefix matters: PowerShell will not run a command from the
+        # current directory without it.
+        shell: pwsh
+        run: .\gradlew.bat build --console=plain --stacktrace
+
+      - name: Collect artifacts
+        id: collect
+        shell: pwsh
+        run: |
+          $jar = Get-ChildItem minecraft-mod\build\libs\*.jar |
+                 Where-Object { $_.Name -notlike "*-sources*" } |
+                 Select-Object -First 1
+          if (-not $jar)  { throw "no mod jar was built" }
+          if ($jar.Length -eq 0) { throw "the mod jar is empty" }
+          New-Item -ItemType Directory -Force -Path dist-release | Out-Null
+          Copy-Item $jar.FullName "dist-release\$($jar.Name)"
+          Copy-Item dist\Eyetracker.exe "dist-release\Eyetracker.exe"
+          "jar=dist-release/$($jar.Name)" >> $env:GITHUB_OUTPUT
+          # Record what was built in the run summary, next to the run itself.
+          "## Release artifacts`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          Get-ChildItem dist-release | ForEach-Object {
+            "| $($_.Name) | $($_.Length) bytes |" |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+            Write-Host "$($_.Name)  $($_.Length) bytes"
+          }
+
+      # --- publish ------------------------------------------------------
+      - name: Create the release
+        id: release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release view $env:TAG --json id --jq .id 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $env:TAG already exists - reusing it"
+            $id = gh release view $env:TAG --json id --jq .id
+          } else {
+            gh release create $env:TAG --title $env:TAG --generate-notes
+            $id = gh release view $env:TAG --json id --jq .id
+          }
+          "release_id=$id" >> $env:GITHUB_OUTPUT
+
+      - name: Upload the assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # --clobber replaces an asset of the same name, so re-running this
+          # workflow on the same tag does not fail or duplicate.
+          gh release upload $env:TAG dist-release\Eyetracker.exe dist-release\*.jar --clobber
+          gh release view $env:TAG
+
+      - name: Verify the published assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          $expected = Get-ChildItem dist-release | ForEach-Object { $_.Name }
+          $published = gh release view $env:TAG --json assets --jq ".assets[].name"
+          foreach ($name in $expected) {
+            if ($published -notcontains $name) {
+              throw "asset $name is missing from the published release"
+            }
+            Write-Host "published: $name"
+          }

@@ -33,9 +33,21 @@ datas = [
     (str(ROOT / "bridge" / "NPClient64.def"), "bridge"),
 ]
 model = ROOT / "models" / "face_landmarker.task"
-if model.exists():
-    # Bundled so a fresh exe works offline; eyetrack.paths prefers it.
-    datas.append((str(model), "models"))
+if not model.exists():
+    # Hard error, not a warning.  Without the model the exe still builds,
+    # ships, and then fails on first launch with a download prompt - which
+    # is a far worse outcome than a red build.  A clean checkout has no
+    # model (it is gitignored, ~3.7 MB), so CI must fetch it first.
+    raise SystemExit(
+        "models/face_landmarker.task is missing.\n"
+        "It is gitignored, so fetch it before building:\n"
+        "  python -c \"from eyetrack.pose import MODEL_URL; "
+        "import urllib.request, pathlib;"
+        " p=pathlib.Path('models'); p.mkdir(exist_ok=True);"
+        " urllib.request.urlretrieve(MODEL_URL, p/'face_landmarker.task')\""
+    )
+# Bundled so a fresh exe works offline; eyetrack.paths prefers it.
+datas.append((str(model), "models"))
 
 # --- imports that static analysis cannot see
 # MediaPipe builds its graph runners at runtime and imports pieces lazily.

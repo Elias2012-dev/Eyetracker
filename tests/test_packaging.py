@@ -118,6 +118,22 @@ def test_spec_does_not_exclude_matplotlib():
     assert '"matplotlib"' in spec, "matplotlib should be an explicit hidden import"
 
 
+def test_spec_refuses_to_build_without_the_model():
+    """A missing model must fail the build, not ship a half-working exe.
+
+    models/*.task is gitignored, so a clean checkout (every CI runner, and
+    anyone cloning fresh) has no model. The spec used to skip it silently,
+    which produced an exe that built fine and then failed on first launch -
+    far worse than a red build.
+    """
+    spec = SPEC.read_text(encoding="utf-8")
+    assert "raise SystemExit" in spec, (
+        "the spec must abort when the face model is missing")
+    # The guard must be an unconditional append after the check, not another
+    # "if it happens to be there".
+    assert 'datas.append((str(model), "models"))' in spec
+
+
 def test_spec_builds_a_windowed_exe():
     spec = SPEC.read_text(encoding="utf-8")
     assert 'name="Eyetracker"' in spec
