@@ -9,8 +9,8 @@ The games look up the containing directory under
   HKCU\Software\NaturalPoint\NATURALPOINT\NPClient Location  (Path)
 (registration handled by `run.bat --install-bridge` / automatic on startup)
 and call NP_GetData() inside the DLL.  The DLL reads the tracker's
-EBT_GameLink_v1 shared memory block.  Nothing from FreeTrack or opentrack is
-used or required.
+EBT_GameLink_v1 shared memory block.  Nothing from FreeTrack or any other
+tracker software is used or required.
 
 Provenance of the game-facing ABI details
 -----------------------------------------

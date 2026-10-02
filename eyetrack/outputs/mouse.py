@@ -1,6 +1,6 @@
 """Mouse emulation output: head pose -> relative mouse motion (any game).
 
-The universal fallback for games that have **no** TrackIR/opentrack support:
+The universal fallback for games that have **no** TrackIR support:
 anything you can normally look around with the mouse.  Yaw/pitch become small
 relative cursor moves through Windows ``SendInput`` - exactly what a physical
 mouse does, so no driver or extra software is involved.

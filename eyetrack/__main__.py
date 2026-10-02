@@ -75,9 +75,6 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--no-auto-bridge", dest="auto_bridge", action="store_false", default=None,
                    help="do not auto-register the registry bridge on startup")
     p.add_argument("--freetrack", action="store_true", help=argparse.SUPPRESS)  # old alias
-    p.add_argument("--opentrack", action="store_true",
-                   help="escape hatch: also stream to an existing opentrack "
-                        "install - no game in the built-in list needs it")
     p.add_argument("--install-bridge", action="store_true",
                    help="register our NPClient DLL for ETS2/ATS and exit")
     p.add_argument("--uninstall-bridge", action="store_true",
@@ -154,9 +151,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.freetrack:
         print("[eyetrack] note: --freetrack is now --game-link (same built-in output)")
         cfg.game_link.enabled, changed = True, True
-    if args.opentrack:
-        cfg.opentrack_udp.enabled, changed = True, True
-
     if changed or not args.config.exists():
         try:
             cfg.save(args.config)

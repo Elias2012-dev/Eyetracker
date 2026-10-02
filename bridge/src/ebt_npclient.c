@@ -9,7 +9,7 @@
  *
  * The game calls NP_GetData() in this DLL; the DLL reads head pose from the
  * EyeTrack shared memory block ("EBT_GameLink_v1") that the tracker writes.
- * No FreeTrack software or opentrack is involved anywhere.
+ * No other tracker software is involved anywhere.
  *
  * The exported function set, the tir_data layout, the checksum and the
  * signature encoding are dictated by the game-facing TrackIR client ABI

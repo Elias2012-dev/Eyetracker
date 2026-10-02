@@ -29,7 +29,7 @@ CONNECTION = {
 
 _TRACKIR_COMMON = (
     "Start the tracker BEFORE the game - it registers the NPClient bridge on its own.",
-    "The game loads our own bridge/NPClient.dll: no TrackIR, opentrack or FreeTrack install needed.",
+    "The game loads our own bridge/NPClient.dll: no TrackIR or FreeTrack install needed.",
     "Recenter with R in the tracker overlay (or the game's own recenter key).",
 )
 

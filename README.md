@@ -1,20 +1,18 @@
 # Eyetracker
 
-Free head/eye tracking for your webcam — no TrackIR, no Tobii, no opentrack,
-no FreeTrack. One tracker feeds every game:
+Free head/eye tracking for your webcam — no TrackIR, no Tobii, no FreeTrack,
+no extra software. One tracker feeds every game:
 
 | Target | How it connects |
 |---|---|
 | **Minecraft 26.2** (Fabric mod in this repo) | UDP JSON packets on `127.0.0.1:47777` |
 | **Any TrackIR game** — ETS2/ATS, MSFS, DCS, X-Plane 12, War Thunder, ACC, DayZ, IL-2, … | **Built-in game link** — our own NPClient DLL + shared memory, registered automatically |
 | **Any mouse-look game** (no TrackIR support required) | **Mouse emulation** — your head drives the cursor (`F9` arms/disarms) |
-| *Escape hatch:* an existing opentrack install | opentrack "UDP over network" protocol on port `4242` — off by default, and no game below needs it |
 
 ```
                        ┌── UDP JSON :47777 ──────► Minecraft mod (camera control)
  webcam ─► tracker ────┼── game link ────────────► TrackIR games (our own NPClient.dll)
- (MediaPipe)           ├── mouse ────────────────► any mouse-look game (SendInput)
-                       └── opentrack UDP :4242 ──► opentrack (optional)
+ (MediaPipe)           └── mouse ────────────────► any mouse-look game (SendInput)
 ```
 
 The tracker estimates **head pose** (yaw / pitch / roll + translation) from a
@@ -38,10 +36,10 @@ the pipeline and protocol already carry everything needed.
 * ~1 GB free for the virtualenv. The MediaPipe face-landmark model
   (~3.8 MB) is downloaded into `models/` on first run.
 
-**Nothing else to install.** No TrackIR hardware, no opentrack, no FreeTrack,
-no virtual device, no driver — every target above is served by code in this
-repository. `opentrack` appears once, off by default, purely as an escape
-hatch for anyone who already runs it and wants its output chains.
+**Nothing else to install.** No TrackIR hardware, no FreeTrack, no virtual
+device, no driver — every target above is served by code in this
+repository, and all three outputs live in it too. There is no third-party
+tracker to install, configure or keep up to date.
 
 ---
 
@@ -199,8 +197,8 @@ Phone streams are often 720p30 — that's plenty; the tracker just asks for
 
 Everything needed is already inside this repository: the tracker ships its
 **own** 6.5 KB `NPClient.dll` (built from [bridge/src](bridge/src)) that the
-games load, fed by the tracker's shared memory. No FreeTrack, no opentrack,
-no extra software. Every TrackIR game in the table above is served exactly
+games load, fed by the tracker's shared memory. No FreeTrack, no extra
+software. Every TrackIR game in the table above is served exactly
 this same way.
 
 1. Start the tracker **before** launching the game:
@@ -226,19 +224,6 @@ this same way.
 3. Axis directions/ranges are adjustable in-game; if you prefer configuring
    the tracker, flip `pose.invert_yaw` / `pose.invert_pitch` in
    `eyetrack.json`.
-
-**Already running opentrack?** You don't have to — everything above works
-without it. The escape hatch exists for the rare case where you want
-opentrack's own profiles, curves or output chains:
-
-```
-run.bat --opentrack
-```
-
-then in opentrack set *Input → UDP over network* (port 4242) and pick any
-output you like. Note that opentrack, if installed, may claim the NPClient
-registry key and win over our DLL — keep its own output disabled, or re-run
-`run.bat --install-bridge`.
 
 ## Any other game — mouse emulation
 
@@ -296,7 +281,6 @@ run.bat --game mouse     # same, plus the per-game setup notes
 | `mouse.invert_x` / `mouse.invert_y` | `false` | flip the mouse axes |
 | `mouse.toggle_key` | `"F9"` | arm/disarm key (`"none"` = always active) |
 | `mouse.rate_hz` | `60` | mouse output rate |
-| `opentrack_udp.enabled` | `false` | escape hatch: also stream to an existing opentrack install |
 | `overlay.enabled` | `true` | preview window |
 
 **`config/freebuff_eyetrack.json`** (Minecraft mod):
@@ -325,9 +309,9 @@ to return to heuristic defaults.
   mouse sensitivity; `mouse.deadzone_deg` up stops idle drift at centre.
 * **ETS2/ATS show no tracking** — start the tracker before the game; check
   the console for `[game-link]` lines (first run should say it registered
-  the bridge). If you also use opentrack, *its* NPClient registration wins
-  the registry key — either disable opentrack's output or run
-  `run.bat --install-bridge` again after it.
+  the bridge). If *other* tracker software installed on this machine owns
+  the NPClient registry key, re-run `run.bat --install-bridge` after it
+  starts, or disable that software while playing.
 * **Bridge DLLs missing** — run `bridge\build.bat` (TinyCC downloads
   automatically; prebuilt DLLs ship with the repo).
 * **No face detected** — improve lighting (light *toward* your face), check
@@ -348,7 +332,7 @@ Repository layout:
 | Path | What it is |
 |---|---|
 | `eyetrack/` | the tracker: capture → head pose → calibration → filter → outputs |
-| `eyetrack/outputs/` | game links: shared memory (TrackIR), UDP JSON (Minecraft), opentrack UDP, mouse |
+| `eyetrack/outputs/` | game links: shared memory (TrackIR), UDP JSON (Minecraft), mouse |
 | `packaging/` | PyInstaller spec + launcher for the standalone exe |
 | `bridge/` | our own NPClient DLL: C sources, prebuilt DLLs, `NOTICE.txt` (ABI provenance) |
 | `minecraft-mod/` | Fabric mod for Minecraft 26.2 |
@@ -356,10 +340,10 @@ Repository layout:
 | `tests/` | pytest suite: protocol, shared memory, DLL ABI roundtrip, mouse, presets |
 
 ```
-# tracker tests (70 tests: filters, calibration, UDP formats, shared memory,
-# mouse mapping, game presets, standalone-without-opentrack guarantees,
-# packaging paths and a full writer -> bridge DLL roundtrip incl. ABI
-# checksum verification)
+# tracker tests (68 tests: filters, calibration, UDP formats, shared memory,
+# mouse mapping, game presets, packaging paths, zero-external-tracker
+# guarantees, and a full writer -> bridge DLL roundtrip incl. ABI checksum
+# verification)
 .venv/Scripts/python -m pytest
 
 # mod tests + build (3 protocol tests + compile against MC 26.2)
@@ -383,8 +367,8 @@ Protocol notes:
   [bridge/src/ebt_npclient.c](bridge/src/ebt_npclient.c)); the DLL converts
   to the TrackIR client ABI (angles ±16383 over ±180°, translation ±16383
   over ±50 cm, standard checksum) inside the game process.
-* **opentrack UDP** — six little-endian `float64`: `x, y, z, yaw, pitch, roll`
-  (cm, degrees), the format of opentrack's *UDP over network* input.
+* **Mouse emulation** — no protocol: head deltas become relative
+  `SendInput` cursor motion in the game process itself.
 
 Toolchain: Python 3.10–3.13 with MediaPipe 1.0 (Tasks API), OpenCV, NumPy;
 mod targets Fabric Loader 0.19.5 / Fabric API 0.161.0+26.2 / Loom 1.18 /
@@ -402,5 +386,5 @@ C built with TinyCC (`bridge/tools`).
   `bridge/NOTICE.txt` for details.
 * FreeTrack 2.0 protocol by the FreeTrack team informed the earlier design;
   this project no longer uses any FreeTrack binaries or shared memory.
-* Thanks to the openTrack and linuxtrack projects for keeping head tracking
-  free and open.
+* Thanks to the linuxtrack project for keeping the TrackIR client ABI
+  documented and implementable in the open.

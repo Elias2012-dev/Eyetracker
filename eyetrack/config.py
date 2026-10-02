@@ -101,20 +101,6 @@ class MouseConfig:
 
 
 @dataclass
-class OpentrackUdpConfig:
-    """Escape hatch for people who already run opentrack (6 doubles, :4242).
-
-    Nothing in this project needs it: the game link and the mouse output
-    cover every supported target on their own. Off by default.
-    """
-
-    enabled: bool = False
-    host: str = "127.0.0.1"
-    port: int = 4242
-    rate_hz: int = 60
-
-
-@dataclass
 class OverlayConfig:
     enabled: bool = True
     show_mesh: bool = True
@@ -129,7 +115,6 @@ class Config:
     udp_json: UdpJsonConfig = field(default_factory=UdpJsonConfig)
     game_link: GameLinkConfig = field(default_factory=GameLinkConfig)
     mouse: MouseConfig = field(default_factory=MouseConfig)
-    opentrack_udp: OpentrackUdpConfig = field(default_factory=OpentrackUdpConfig)
     overlay: OverlayConfig = field(default_factory=OverlayConfig)
 
     # ------------------------------------------------------------------
@@ -154,7 +139,7 @@ class Config:
                 raise SystemExit(f"Could not read config {path}: {exc}") from exc
             for name in (
                 "camera", "pose", "filter", "udp_json",
-                "game_link", "mouse", "opentrack_udp", "overlay",
+                "game_link", "mouse", "overlay",
             ):
                 if isinstance(raw.get(name), dict):
                     sub_cls = getattr(cls, "__dataclass_fields__")[name].default_factory  # type: ignore[attr-defined]
