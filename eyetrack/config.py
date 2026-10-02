@@ -102,7 +102,11 @@ class MouseConfig:
 
 @dataclass
 class OpentrackUdpConfig:
-    """Feed an existing opentrack install (6 doubles, port 4242)."""
+    """Escape hatch for people who already run opentrack (6 doubles, :4242).
+
+    Nothing in this project needs it: the game link and the mouse output
+    cover every supported target on their own. Off by default.
+    """
 
     enabled: bool = False
     host: str = "127.0.0.1"

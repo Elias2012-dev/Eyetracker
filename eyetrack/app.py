@@ -101,6 +101,11 @@ def run(cfg: Config, *, config_path: Path, start_wizard: bool = False,
 
     mouse_out = next((o for o in outputs if o.name == "mouse"), None)
 
+    if cfg.opentrack_udp.enabled:
+        print("[eyetrack] note: the opentrack escape hatch is on - nothing here "
+              "needs it, and if opentrack is installed it may claim the NPClient "
+              "registry key and win over our own DLL.")
+
     overlay = Overlay(cfg.overlay.window, cfg.overlay.show_mesh) if cfg.overlay.enabled else None
     wizard = CalibrationWizard(cfg.pose.yaw_range, cfg.pose.pitch_range,
                                cfg.pose.reference_distance_cm) if start_wizard else None

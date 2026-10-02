@@ -8,7 +8,7 @@ no FreeTrack. One tracker feeds every game:
 | **Minecraft 26.2** (Fabric mod in this repo) | UDP JSON packets on `127.0.0.1:47777` |
 | **Any TrackIR game** — ETS2/ATS, MSFS, DCS, X-Plane 12, War Thunder, ACC, DayZ, IL-2, … | **Built-in game link** — our own NPClient DLL + shared memory, registered automatically |
 | **Any mouse-look game** (no TrackIR support required) | **Mouse emulation** — your head drives the cursor (`F9` arms/disarms) |
-| **Anything opentrack supports** (optional extra) | opentrack "UDP over network" protocol on port `4242` |
+| *Escape hatch:* an existing opentrack install | opentrack "UDP over network" protocol on port `4242` — off by default, and no game below needs it |
 
 ```
                        ┌── UDP JSON :47777 ──────► Minecraft mod (camera control)
@@ -37,6 +37,11 @@ the pipeline and protocol already carry everything needed.
   downloads a JDK 25 for itself (foojay resolver).
 * ~1 GB free for the virtualenv. The MediaPipe face-landmark model
   (~3.8 MB) is downloaded into `models/` on first run.
+
+**Nothing else to install.** No TrackIR hardware, no opentrack, no FreeTrack,
+no virtual device, no driver — every target above is served by code in this
+repository. `opentrack` appears once, off by default, purely as an escape
+hatch for anyone who already runs it and wants its output chains.
 
 ---
 
@@ -174,14 +179,18 @@ this same way.
    the tracker, flip `pose.invert_yaw` / `pose.invert_pitch` in
    `eyetrack.json`.
 
-**Prefer opentrack instead?** It's optional:
+**Already running opentrack?** You don't have to — everything above works
+without it. The escape hatch exists for the rare case where you want
+opentrack's own profiles, curves or output chains:
 
 ```
 run.bat --opentrack
 ```
 
 then in opentrack set *Input → UDP over network* (port 4242) and pick any
-output you like.
+output you like. Note that opentrack, if installed, may claim the NPClient
+registry key and win over our DLL — keep its own output disabled, or re-run
+`run.bat --install-bridge`.
 
 ## Any other game — mouse emulation
 
@@ -239,7 +248,7 @@ run.bat --game mouse     # same, plus the per-game setup notes
 | `mouse.invert_x` / `mouse.invert_y` | `false` | flip the mouse axes |
 | `mouse.toggle_key` | `"F9"` | arm/disarm key (`"none"` = always active) |
 | `mouse.rate_hz` | `60` | mouse output rate |
-| `opentrack_udp.enabled` | `false` | optional opentrack stream |
+| `opentrack_udp.enabled` | `false` | escape hatch: also stream to an existing opentrack install |
 | `overlay.enabled` | `true` | preview window |
 
 **`config/freebuff_eyetrack.json`** (Minecraft mod):
@@ -298,9 +307,9 @@ Repository layout:
 | `tests/` | pytest suite: protocol, shared memory, DLL ABI roundtrip, mouse, presets |
 
 ```
-# tracker tests (46 tests: filters, calibration, UDP formats, shared memory,
-# mouse mapping, game presets, and a full writer -> bridge DLL roundtrip
-# incl. ABI checksum verification)
+# tracker tests (53 tests: filters, calibration, UDP formats, shared memory,
+# mouse mapping, game presets, standalone-without-opentrack guarantees, and a
+# full writer -> bridge DLL roundtrip incl. ABI checksum verification)
 .venv/Scripts/python -m pytest
 
 # mod tests + build (3 protocol tests + compile against MC 26.2)

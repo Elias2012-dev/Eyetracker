@@ -50,7 +50,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
                    help="do not auto-register the registry bridge on startup")
     p.add_argument("--freetrack", action="store_true", help=argparse.SUPPRESS)  # old alias
     p.add_argument("--opentrack", action="store_true",
-                   help="enable opentrack UDP output (optional, for other games)")
+                   help="escape hatch: also stream to an existing opentrack "
+                        "install - no game in the built-in list needs it")
     p.add_argument("--install-bridge", action="store_true",
                    help="register our NPClient DLL for ETS2/ATS and exit")
     p.add_argument("--uninstall-bridge", action="store_true",
