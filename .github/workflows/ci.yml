@@ -56,7 +56,11 @@ jobs:
 
       - name: Test and build
         working-directory: minecraft-mod
-        run: gradlew.bat build --console=plain --stacktrace
+        # The .\ prefix matters: the default shell here is PowerShell, which
+        # will not run a command from the current directory without it, so a
+        # bare "gradlew.bat" fails with "is not recognized as a name".
+        shell: pwsh
+        run: .\gradlew.bat build --console=plain --stacktrace
 
       - name: Verify the jar really was produced
         working-directory: minecraft-mod
