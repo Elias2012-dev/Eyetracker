@@ -70,11 +70,24 @@ jobs:
           $env:EYE_TRACKER_NO_DIALOG = "1"
           # --paths touches nothing but the filesystem: it proves the bundle
           # unpacks and imports without needing a camera or a display.
-          .\dist\Eyetracker.exe --paths
-          if ($LASTEXITCODE -ne 0) { throw "exe --paths failed" }
+          #
+          # Start-Process rather than a bare call: the exe is built windowed
+          # (console=False), so it has no console to inherit and its exit code
+          # is not reliably visible to the caller. -Wait plus -PassThru gives
+          # the real ExitCode.
+          $p = Start-Process -FilePath .\dist\Eyetracker.exe `
+                              -ArgumentList "--paths" `
+                              -NoNewWindow -Wait -PassThru
+          Write-Host "exe --paths exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { throw "exe --paths failed ($($p.ExitCode))" }
           # The model must be inside the bundle, not merely present next to it.
           if (-not (Select-String -Path .\dist\Eyetracker.exe -Pattern "face_landmarker.task" -SimpleMatch -Quiet)) {
             throw "the built exe does not contain the face model"
+          }
+          # The 32-bit name is a copy of the 64-bit build; if the exe is
+          # published without it, a 32-bit game finds nothing to load.
+          foreach ($dll in "bridge\NPClient.dll", "bridge\NPClient64.dll") {
+            if (-not (Test-Path $dll)) { throw "missing $dll from the checkout" }
           }
           Write-Host "exe smoke test passed"
 
