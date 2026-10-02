@@ -26,6 +26,14 @@ the pipeline and protocol already carry everything needed.
 
 ---
 
+## Installation
+
+New here? Follow **[INSTALL.md](INSTALL.md)** — step-by-step setup for the
+exe, the Minecraft mod, a phone as the camera, running from source, and a
+verification checklist.
+
+---
+
 ## Download — get `Eyetracker.exe`
 
 **How to download: go to the releases page and install `Eyetracker.exe`.**
@@ -85,7 +93,7 @@ tracker to install, configure or keep up to date.
 ## Run it as a standalone .exe
 
 You do not have to build this — **download `Eyetracker.exe` from the
-[releases page](#download--get-eyetrackerexe)**. To build it yourself (for
+[releases page](#download-get-eyetrackerexe)**. To build it yourself (for
 example to verify the published binary):
 
 ```
@@ -172,7 +180,7 @@ software would, so every title on the TrackIR supported list (780+ games)
 can load it. Start the tracker first, enable head tracking in the game, done.
 
 Games without TrackIR support are covered by **mouse emulation** — see
-[Any other game — mouse emulation](#any-other-game--mouse-emulation).
+[Any other game — mouse emulation](#any-other-game-mouse-emulation).
 
 ---
 
