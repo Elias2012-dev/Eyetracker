@@ -111,6 +111,7 @@ console the same text appears in a dialog (set `EYE_TRACKER_NO_DIALOG=1`
 to suppress that for unattended runs):
 
 ```
+Eyetracker.exe --pick-camera     # choose from a list of every detected camera
 Eyetracker.exe --list-cameras    # dialog listing your cameras
 Eyetracker.exe --list-games      # the game preset matrix
 Eyetracker.exe --paths           # where config, model, DLLs and log live
@@ -179,10 +180,17 @@ Games without TrackIR support are covered by **mouse emulation** — see
 1. **Start the tracker** (first run installs its Python dependencies):
 
    ```
+   run.bat --pick-camera           # choose from a list of every detected camera
    run.bat --list-cameras          # see every camera, incl. phone/virtual ones
-   run.bat --camera-name "Camo"    # pick yours once (saved to eyetrack.json)
+   run.bat --camera-name "Camo"    # or pick by name (saved to eyetrack.json)
    run.bat
    ```
+
+   `--pick-camera` lists every camera Windows reports and takes either a
+   number or any part of a name, then saves the choice — so you only have
+   to do it once. It stores the *device name* rather than the index,
+   because indices shuffle when you unplug a webcam or reboot, and the
+   name doesn't.
 
    The first run also fetches the MediaPipe face-landmark model into
    `models/` — no manual step.
@@ -234,8 +242,9 @@ camera** works, and the tracker can select it **by name**:
 3. Enumerate and select it:
 
    ```
-   run.bat --list-cameras
-   run.bat --camera-name "Camo"        # case-insensitive substring, saved
+   run.bat --pick-camera                # pick from the list, saved for next time
+   run.bat --list-cameras               # or just look
+   run.bat --camera-name "Camo"         # case-insensitive substring, saved
    ```
 
    The name lives in `eyetrack.json` as `camera.device_name`; leave it empty

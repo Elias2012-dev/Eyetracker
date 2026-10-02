@@ -47,6 +47,10 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--config", type=Path, default=DEFAULT_CONFIG,
                    help=f"config file (default: {DEFAULT_CONFIG.name})")
     p.add_argument("--camera", type=int, help="camera index")
+    p.add_argument("--pick-camera", dest="pick_camera", action="store_true",
+                   default=False,
+                   help="list every camera Windows reports and choose one "
+                        "interactively (saves it for next time)")
     p.add_argument("--camera-name", type=str, metavar="NAME",
                    help="select camera by device name substring "
                         "(e.g. \"Iriun\", \"DroidCam\", \"iPhone\", \"OBS\")")
@@ -172,7 +176,8 @@ def main(argv: list[str] | None = None) -> int:
     from .app import run
     return run(cfg, config_path=args.config,
                start_wizard=args.calibrate,
-               recenter_on_start=args.recenter_on_start)
+               recenter_on_start=args.recenter_on_start,
+               pick_camera=args.pick_camera)
 
 
 if __name__ == "__main__":

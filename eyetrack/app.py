@@ -18,6 +18,31 @@ from .pose import HeadPose, HeadPoseEstimator
 HELP_STATUS = "keys:  C calibrate   R recenter   Q quit"
 
 
+def _prompt_for_camera(cfg: Config, config_path: Path) -> None:
+    """Let the user pick from every camera Windows reports, and remember it.
+
+    The choice is saved as a *name* rather than an index: indices are not
+    stable across reboots or USB reordering, but the device name is, so
+    this keeps working when the same webcam comes back at a different
+    index.
+    """
+    from .cameras import choose_interactively
+
+    dev = choose_interactively()
+    if dev is None:
+        print("[camera] keeping the camera from the config "
+              f"(index {cfg.camera.index}"
+              f"{', name ' + cfg.camera.device_name if cfg.camera.device_name else ''}).")
+        return
+    cfg.camera.index = dev.index
+    cfg.camera.device_name = dev.name
+    print(f"[camera] selected '{dev.name}' (index {dev.index}) - saving it.")
+    try:
+        cfg.save(config_path)
+    except OSError as exc:
+        print(f"[eyetrack] warning: could not save config: {exc}")
+
+
 def open_camera(cfg: Config):
     from .cameras import resolve_index
 
@@ -26,7 +51,8 @@ def open_camera(cfg: Config):
     if not cap.isOpened():
         raise SystemExit(f"Could not open camera index {index} "
                          f"(name filter: {cfg.camera.device_name or '-'}). "
-                         "Try --list-cameras, --camera N or --camera-name NAME.")
+                         "Try --pick-camera to choose from a list, "
+                         "--list-cameras, --camera N or --camera-name NAME.")
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.camera.width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.camera.height)
     cap.set(cv2.CAP_PROP_FPS, cfg.camera.fps)
@@ -81,7 +107,9 @@ def _apply_gains(cfg: Config, pose: dict[str, float]) -> dict[str, float]:
 
 
 def run(cfg: Config, *, config_path: Path, start_wizard: bool = False,
-        recenter_on_start: bool = False) -> int:
+        recenter_on_start: bool = False, pick_camera: bool = False) -> int:
+    if pick_camera:
+        _prompt_for_camera(cfg, config_path)
     print("[eyetrack] starting camera", cfg.camera.index)
     estimator = HeadPoseEstimator()
     cap = open_camera(cfg)
