@@ -1,5 +1,7 @@
 # Eyetracker
 
+[![Downloads](https://img.shields.io/github/downloads/Elias2012-dev/Eyetracker/total?style=flat-square&label=downloads)](https://github.com/Elias2012-dev/Eyetracker/releases)
+
 Free head/eye tracking for your webcam — no TrackIR, no Tobii, no FreeTrack,
 no extra software. One tracker feeds every game:
 
@@ -20,6 +22,42 @@ single webcam — physical or a phone used as a Windows virtual camera — using
 MediaPipe's face landmarker, smooths it with a One-Euro filter, applies your
 calibration, and streams it out. Eyes-only gaze can be layered on later —
 the pipeline and protocol already carry everything needed.
+
+---
+
+## Download — get `Eyetracker.exe`
+
+**How to download: go to the releases page and install `Eyetracker.exe`.**
+
+👉 **[github.com/Elias2012-dev/Eyetracker/releases](https://github.com/Elias2012-dev/Eyetracker/releases)**
+
+| File | What it is |
+|---|---|
+| [**Eyetracker.exe**](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/Eyetracker.exe) | the whole tracker, self-contained (~113 MB) — no Python, no terminal, no pip |
+| [**freebuff-eyetrack-1.0.0.jar**](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/freebuff-eyetrack-1.0.0.jar) | the Minecraft 26.2 mod (only needed for Minecraft) |
+
+**Installing is the download.** No installer, no setup wizard, no
+dependencies:
+
+1. Download `Eyetracker.exe` from the releases page.
+2. Double-click it. The preview window that opens *is* the interface.
+3. Start it **before** the game.
+   * **ETS2 / ATS** — *Options → Gameplay → TrackIR* on.
+   * **MSFS / DCS / X-Plane 12 / War Thunder / ACC / DayZ / IL-2** — enable
+     head tracking in the game; it loads our DLL straight from the standard
+     TrackIR registry key.
+   * **Minecraft** — drop `freebuff-eyetrack-1.0.0.jar` into your `mods`
+     folder next to Fabric Loader + Fabric API, then press `H` to toggle
+     tracking and `J` to recentre.
+   * **Any mouse-look game** — run with `--mouse` and press `F9` to arm.
+
+Windows may say "Windows protected your PC" because the build is not
+code-signed: choose **More info → Run anyway**. Every build is reproducible
+from the source in this repository, so you can verify or rebuild it
+yourself ([build_exe.bat](#run-it-as-a-standalone-exe)).
+
+Prefer a phone or no download? See
+[Using your phone as the camera](#using-your-phone-as-the-camera-windows-virtual-camera).
 
 ---
 
@@ -45,8 +83,9 @@ tracker to install, configure or keep up to date.
 
 ## Run it as a standalone .exe
 
-The tracker builds into a single **windowed executable** — no Python, no
-terminal, no pip:
+You do not have to build this — **download `Eyetracker.exe` from the
+[releases page](#download--get-eyetrackerexe)**. To build it yourself (for
+example to verify the published binary):
 
 ```
 build_exe.bat              -> dist\Eyetracker.exe      (one file, ~113 MB)
