@@ -21,7 +21,7 @@ and default to sane heuristics until calibrated.
 from __future__ import annotations
 
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2

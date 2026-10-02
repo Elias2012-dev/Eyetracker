@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A new push supersedes an in-flight run for the same ref, so queued
+  # commits do not each burn a full Minecraft build.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tracker-tests:
+    name: Tracker tests (Windows)
+    # Several suites skip themselves off Windows (shared memory, registry
+    # bridge, the NPClient DLL itself), so this has to run on Windows or
+    # CI would quietly ignore exactly the code most likely to break.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest pyflakes
+
+      - name: Lint
+        run: python -m pyflakes eyetrack tests tools
+
+      - name: Test
+        run: python -m pytest -q
+
+  mod-build:
+    name: Minecraft mod build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          # build.gradle sets sourceCompatibility/targetCompatibility to 25,
+          # so an older JDK fails the compile rather than the workflow.
+          distribution: temurin
+          java-version: "25"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Test and build
+        working-directory: minecraft-mod
+        run: gradlew.bat build --console=plain --stacktrace
+
+      - name: Verify the jar really was produced
+        working-directory: minecraft-mod
+        shell: bash
+        run: |
+          ls -la build/libs/
+          # A green Gradle build that silently produced no jar would still
+          # let the release upload a stale asset, so assert it is non-empty.
+          jar=$(ls build/libs/*.jar | grep -v -- '-sources' | head -1)
+          test -n "$jar" || { echo "no mod jar was built"; exit 1; }
+          test -s "$jar" || { echo "$jar is empty"; exit 1; }
+          echo "mod jar: $jar ($(stat -c%s "$jar") bytes)"

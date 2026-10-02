@@ -39,7 +39,6 @@ def main(paths: list[str]) -> None:
             print("  M =\n", out.matrix)
             R = out.matrix[:3, :3]
             # candidate decompositions (rotation order guesses)
-            sy = np.sqrt(R[0, 2] ** 2 + R[1, 2] ** 2 + R[2, 2] ** 2) if False else None
             import math
 
             def d(a):

@@ -8,7 +8,6 @@ import pytest
 from eyetrack.outputs.game_link import (
     EBTLink,
     FILE_MAP_WRITE,
-    LINK_MUTEX,
     LINK_NAME,
     PAGE_READWRITE,
     GameLinkOutput,
