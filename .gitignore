@@ -2,9 +2,27 @@
 .jdk/
 __pycache__/
 *.pyc
+.pytest_cache/
 .gradle/
 build/
 out/
 *.log
 eyetrack.json
 bridge_registry_backup.json
+
+# Minecraft mod dev client data
+minecraft-mod/run/
+
+# TinyCC, fetched by bridge\build.bat on demand
+bridge/tools/
+
+# MediaPipe model, downloaded automatically on first run
+models/*.task
+
+# Local test photo for tools/inspect_pose.py (a face photo - not published)
+tools/data/
+
+# Third-party reference sources the TrackIR ABI was derived from
+# (provenance is documented in bridge/NOTICE.txt), plus workspace metadata.
+research/
+.freebuff/

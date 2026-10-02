@@ -1,4 +1,4 @@
-# Freebuff EyeTrack
+# Eyetracker
 
 Free head/eye tracking for your webcam — no TrackIR, no Tobii, no opentrack,
 no FreeTrack. One tracker feeds every game:
@@ -22,6 +22,21 @@ single webcam — physical or a phone used as a Windows virtual camera — using
 MediaPipe's face landmarker, smooths it with a One-Euro filter, applies your
 calibration, and streams it out. Eyes-only gaze can be layered on later —
 the pipeline and protocol already carry everything needed.
+
+---
+
+## Requirements
+
+* **Windows** for the game link, the mouse output and the registry bridge.
+  The tracker itself is cross-platform (OpenCV + MediaPipe).
+* **Python 3.10–3.13** — `run.bat` creates `.venv` and installs
+  `requirements.txt` (MediaPipe, OpenCV, NumPy) on first run.
+* **A webcam**, or a phone acting as a Windows virtual camera (see
+  [Using your phone as the camera](#using-your-phone-as-the-camera-windows-virtual-camera)).
+* **The Minecraft mod is optional** and needs no Java of its own — Gradle
+  downloads a JDK 25 for itself (foojay resolver).
+* ~1 GB free for the virtualenv. The MediaPipe face-landmark model
+  (~3.8 MB) is downloaded into `models/` on first run.
 
 ---
 
@@ -65,11 +80,14 @@ Games without TrackIR support are covered by **mouse emulation** — see
    run.bat
    ```
 
+   The first run also fetches the MediaPipe face-landmark model into
+   `models/` — no manual step.
+
    Press `C` once and walk through the 5-step calibration (look centre,
    left, right, up, down) — it takes 30 seconds and makes the feel right.
 
-2. **Build the mod** (only needed once — a project-local JDK 25 is used
-   automatically):
+2. **Build the mod** (only needed once — no Java install needed: Gradle
+   downloads the required JDK 25 itself):
 
    ```
    cd minecraft-mod
@@ -268,6 +286,17 @@ to return to heuristic defaults.
 
 ## Development
 
+Repository layout:
+
+| Path | What it is |
+|---|---|
+| `eyetrack/` | the tracker: capture → head pose → calibration → filter → outputs |
+| `eyetrack/outputs/` | game links: shared memory (TrackIR), UDP JSON (Minecraft), opentrack UDP, mouse |
+| `bridge/` | our own NPClient DLL: C sources, prebuilt DLLs, `NOTICE.txt` (ABI provenance) |
+| `minecraft-mod/` | Fabric mod for Minecraft 26.2 |
+| `tools/` | `fake_tracker.py` (synthetic motion), `inspect_pose.py` (pose debugging) |
+| `tests/` | pytest suite: protocol, shared memory, DLL ABI roundtrip, mouse, presets |
+
 ```
 # tracker tests (46 tests: filters, calibration, UDP formats, shared memory,
 # mouse mapping, game presets, and a full writer -> bridge DLL roundtrip
@@ -302,7 +331,9 @@ C built with TinyCC (`bridge/tools`).
 
 ## Credits & licensing
 
-* Tracker, mod and bridge source: MIT (see `minecraft-mod/LICENSE`).
+* Tracker, mod and bridge source: MIT (see [LICENSE](LICENSE)).
+* The MediaPipe face-landmark model (`models/face_landmarker.task`, fetched
+  at runtime from Google's model repository) is Apache-2.0, © Google.
 * `bridge/src/ebt_npclient.c` implements the published TrackIR client API
   (exports, data layout, checksum, signature constants) as established by
   the public reference clients (wine / linuxtrack) — see
