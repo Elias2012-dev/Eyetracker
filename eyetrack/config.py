@@ -105,6 +105,12 @@ class OverlayConfig:
     enabled: bool = True
     show_mesh: bool = True
     window: str = "eyetrack"
+    # Small numbers-only panel instead of the camera view, for keeping the
+    # axes in peripheral vision while a game owns the focus.
+    compact: bool = False
+    # Stay above the game window. Off by default: it is a preference, and
+    # silently stealing z-order is surprising.
+    top_most: bool = False
 
 
 @dataclass

@@ -54,6 +54,14 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--height", type=int, help="capture height")
     p.add_argument("--fps", type=int, help="capture fps")
     p.add_argument("--no-overlay", action="store_true", help="disable the preview window")
+    p.add_argument("--compact", dest="compact", action="store_true", default=None,
+                   help="small numbers-only HUD instead of the camera view")
+    p.add_argument("--no-compact", dest="compact", action="store_false", default=None,
+                   help="full camera view with the HUD on top")
+    p.add_argument("--top-most", dest="top_most", action="store_true", default=None,
+                   help="keep the HUD above other windows")
+    p.add_argument("--no-top-most", dest="top_most", action="store_false", default=None,
+                   help="leave the window z-order alone (default)")
     p.add_argument("--udp-port", type=int, help="Minecraft UDP output port")
     p.add_argument("--udp-host", help="Minecraft UDP output host")
     p.add_argument("--no-udp", action="store_true", help="disable the UDP JSON output")
@@ -136,6 +144,10 @@ def main(argv: list[str] | None = None) -> int:
         cfg.camera.fps, changed = args.fps, True
     if args.no_overlay:
         cfg.overlay.enabled, changed = False, True
+    if args.compact is not None:
+        cfg.overlay.compact, changed = args.compact, True
+    if args.top_most is not None:
+        cfg.overlay.top_most, changed = args.top_most, True
     if args.udp_port is not None:
         cfg.udp_json.port, changed = args.udp_port, True
     if args.udp_host is not None:

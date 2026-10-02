@@ -101,7 +101,11 @@ def run(cfg: Config, *, config_path: Path, start_wizard: bool = False,
 
     mouse_out = next((o for o in outputs if o.name == "mouse"), None)
 
-    overlay = Overlay(cfg.overlay.window, cfg.overlay.show_mesh) if cfg.overlay.enabled else None
+    overlay = Overlay(cfg.overlay.window, cfg.overlay.show_mesh,
+                      top_most=cfg.overlay.top_most, compact=cfg.overlay.compact,
+                      yaw_range=cfg.pose.yaw_range,
+                      pitch_range=cfg.pose.pitch_range,
+                      roll_range=cfg.pose.roll_range) if cfg.overlay.enabled else None
     wizard = CalibrationWizard(cfg.pose.yaw_range, cfg.pose.pitch_range,
                                cfg.pose.reference_distance_cm) if start_wizard else None
 

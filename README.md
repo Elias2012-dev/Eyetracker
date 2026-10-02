@@ -298,6 +298,29 @@ run.bat --game mouse     # same, plus the per-game setup notes
 | `Q` / `ESC` | quit |
 | `F9` | arm/disarm the mouse output (global; only when `mouse.enabled`) |
 
+### The HUD
+
+The preview window *is* the interface, so it answers three things at a
+glance: a status pill for whether a face is found, three centre-anchored
+meters with an explicit sign legend (`yaw +12.3°  + = your left`), and the
+calibration wizard when it is running. The sign legends are the point —
+which way is "positive" is the number one source of "the camera moves the
+wrong way" confusion.
+
+Two layouts:
+
+| Flag | Effect |
+|---|---|
+| *(default)* | full camera view with the HUD on top |
+| `--compact` | small numbers-only panel, no camera image |
+| `--top-most` | keep the HUD above the game window |
+
+`--compact` and `--top-most` are the pair to reach for when a game has the
+focus: a 460×250 panel is easy to keep in peripheral vision. Both persist
+to the config, so `Eyetracker.exe --compact` needs saying only once. Both
+have `--no-` inverses, which is what lets a one-off flag *not* overwrite a
+saved preference.
+
 ## Configuration files
 
 **`eyetrack.json`** (tracker, created on first run):
@@ -321,6 +344,8 @@ run.bat --game mouse     # same, plus the per-game setup notes
 | `mouse.toggle_key` | `"F9"` | arm/disarm key (`"none"` = always active) |
 | `mouse.rate_hz` | `60` | mouse output rate |
 | `overlay.enabled` | `true` | preview window |
+| `overlay.compact` | `false` | numbers-only HUD instead of the camera view |
+| `overlay.top_most` | `false` | keep the HUD above other windows |
 
 **`config/freebuff_eyetrack.json`** (Minecraft mod):
 
