@@ -1,0 +1,29 @@
+EyeTrack game-link bridge (NPClient DLLs)
+==========================================
+
+These tiny DLLs are how ETS2 / ATS receive head pose from this tracker:
+
+  NPClient.dll, NPClient64.dll   built from src/ebt_npclient.c (this repo)
+
+The games look up the containing directory under
+  HKCU\Software\NaturalPoint\NATURALPOINT\NPClient Location  (Path)
+(registration handled by `run.bat --install-bridge` / automatic on startup)
+and call NP_GetData() inside the DLL.  The DLL reads the tracker's
+EBT_GameLink_v1 shared memory block.  Nothing from FreeTrack or opentrack is
+used or required.
+
+Provenance of the game-facing ABI details
+-----------------------------------------
+* Exported function set, tir_data layout, scaling rules and checksum
+  algorithm follow the published TrackIR client API as implemented by the
+  public reference clients (wine's NPClient, linuxtrack's contrib/npclient -
+  the same behavior games already accept).
+* The NP_GetSignature byte arrays are the established ABI constants,
+  reproduced byte-exactly into src/ebt_signatures.h from that public
+  reference; they decode to NaturalPoint's standard signature strings.
+
+Building
+--------
+  build.bat          (downloads TinyCC on first run - see the script)
+
+Rebuild is only needed if you change src/*.c; prebuilt DLLs are committed.
