@@ -8,7 +8,7 @@ face (a phone camera counts) instead of guessed from theory::
     python tools/live_axes.py --scan
 
     # 30 seconds of live readings (Ctrl+C or wait for it to finish)
-    python tools/live_axes.py --camera-name "Elias A56" --seconds 30
+    python tools/live_axes.py --camera-name "Pixel 8" --seconds 30
 
     # timed sweep that ends with a verdict on every axis
     python tools/live_axes.py --camera-name Camo --script

@@ -244,8 +244,8 @@ camera** works, and the tracker can select it **by name**:
 1. On the phone + PC install one of (all free tiers exist):
    **Camo**, **Iriun Webcam**, **DroidCam**, **EpocCam**, or use your phone
    maker's companion app (e.g. Motorola/Lenovo, Samsung, or "Link to
-   Windows" streaming — devices show up as e.g. *"Elias A56 (Windows
-   Virtuell Kamera)"*).
+   Windows" streaming — devices show up as e.g. *"Pixel 8 (Windows
+   Virtuell Kamera)"*, named after your phone).
 2. Start the companion app so the phone is **actually streaming** (a virtual
    camera that isn't fed outputs a black frame).
 3. Enumerate and select it:

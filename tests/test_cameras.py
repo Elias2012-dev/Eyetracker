@@ -17,7 +17,9 @@ from eyetrack.cameras import CameraDevice, find_by_name
 
 DEVICES = [
     CameraDevice(0, "Camo"),
-    CameraDevice(1, "Elias A56 (Windows Virtuell Kamera)"),
+    # Shaped like a real phone-as-webcam entry: Windows names the virtual
+    # camera after the device model.
+    CameraDevice(1, "Pixel 8 (Windows Virtuell Kamera)"),
     CameraDevice(2, "OBS Virtual Camera"),
 ]
 

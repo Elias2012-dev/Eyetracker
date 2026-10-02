@@ -185,7 +185,8 @@ a Windows virtual camera that shows up as a normal webcam.
    ```
    Eyetracker.exe --list-cameras
    ```
-   It should appear as e.g. `Elias A56 (Windows Virtuell Kamera)`.
+   It should appear as e.g. `Pixel 8 (Windows Virtuell Kamera)` — Windows
+   names virtual cameras after the phone model.
 3. Select it:
    ```
    Eyetracker.exe --pick-camera
