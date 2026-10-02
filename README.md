@@ -148,7 +148,17 @@ prints that game's setup notes.
 | IL-2 Sturmovik | `il2` | built-in game link (TrackIR API) |
 | Assetto Corsa Competizione | `acc` | built-in game link (TrackIR API) |
 | DayZ | `dayz` | built-in game link (TrackIR API) |
+| Farming Simulator 25 | `fs25` | built-in game link (TrackIR API) |
+| Farming Simulator 22 | `fs22` | built-in game link (TrackIR API) |
 | **anything with mouse-look** | `mouse` | mouse emulation (head moves the cursor) |
+
+**Farming Simulator (22 / 25)** works like ETS2 — both run on the GIANTS
+engine, which loads a TrackIR client DLL the same way. Enable head
+tracking under *Options → General*. If the view doesn't move, open the
+game's `log.txt` and find the `Head Tracking System` line: it names the
+system the engine actually selected. `TrackIR Client` means the engine saw
+our bridge and the problem is in-game settings; `none` means it didn't find
+it, so check the tracker was started first.
 
 **Any other TrackIR game works too** — our DLL *is* a normal NPClient: it
 answers the same registry lookup, exports and checksum the TrackIR client

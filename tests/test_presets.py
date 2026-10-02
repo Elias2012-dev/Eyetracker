@@ -23,8 +23,23 @@ def test_catalog_is_well_formed():
 
 def test_expected_games_are_covered():
     for key in ("minecraft", "ets2", "ats", "msfs", "dcs", "xplane",
-                "war-thunder", "il2", "acc", "dayz", "mouse"):
+                "war-thunder", "il2", "acc", "dayz", "fs25", "fs22", "mouse"):
         assert key in P.PRESETS, f"missing preset: {key}"
+
+
+@pytest.mark.parametrize("key", ("fs25", "fs22"))
+def test_farming_simulator_presets_use_the_trackir_bridge(key):
+    """FS runs on the GIANTS engine, which loads a TrackIR client DLL.
+
+    It must therefore ride the existing game_link bridge rather than the
+    mouse output - FS reads head pose as a camera, not as cursor motion.
+    """
+    preset = P.PRESETS[key]
+    assert preset.family == "trackir"
+    assert preset.outputs == ("game_link",)
+    # The notes have to tell people where the engine actually reports this.
+    assert any("log.txt" in n for n in preset.notes), (
+        f"{key} must explain how to diagnose a dead head-tracking setup")
 
 
 def test_family_determines_the_connection():

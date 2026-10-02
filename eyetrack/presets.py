@@ -4,7 +4,9 @@ The heavy lifting is done elsewhere:
 
 * **TrackIR-native games** are served by our own ``bridge/NPClient.dll`` -
   any game that looks up the NaturalPoint registry key loads it, so the whole
-  TrackIR catalogue works without any TrackIR software installed.
+  TrackIR catalogue works without any TrackIR software installed.  This
+  includes the GIANTS-engine sims (Farming Simulator 22/25), which probe for
+  a TrackIR client the same way ETS2/ATS do.
 * **Minecraft 26.2** uses the Fabric mod in this repo (UDP JSON stream).
 * **Everything else** can be driven through the mouse-emulation output
   (head pose -> relative cursor motion).
@@ -91,6 +93,15 @@ PRESETS: dict[str, GamePreset] = {p.key: p for p in (
              "ACC supports TrackIR natively - enable it in the controls/camera options."),
     _trackir("dayz", "DayZ",
              "DayZ supports TrackIR natively - enable it in the game settings."),
+    _trackir("fs25", "Farming Simulator 25",
+             "In game: Options -> General -> enable head tracking (TrackIR).",
+             'GIANTS games read game.xml: <headTracking active="true" trackir="true"/>.',
+             "Not moving? Open log.txt and find the 'Head Tracking System' line -",
+             "it names the system the game picked. 'TrackIR Client' means it saw",
+             "our bridge and something else is wrong; 'none' means it did not."),
+    _trackir("fs22", "Farming Simulator 22",
+             "In game: Options -> General -> enable head tracking (TrackIR).",
+             "Same GIANTS engine as FS25, so the same log.txt check applies."),
     GamePreset(
         key="mouse",
         title="Any mouse-look game (no TrackIR needed)",
