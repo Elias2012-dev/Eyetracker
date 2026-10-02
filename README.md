@@ -45,6 +45,54 @@ hatch for anyone who already runs it and wants its output chains.
 
 ---
 
+## Run it as a standalone .exe
+
+The tracker builds into a single **windowed executable** — no Python, no
+terminal, no pip:
+
+```
+build_exe.bat              -> dist\Eyetracker.exe      (one file, ~113 MB)
+build_exe.bat --onedir     -> dist\Eyetracker\...     (folder, instant start)
+```
+
+The script creates the virtualenv, installs PyInstaller and bundles
+everything the tracker needs: the MediaPipe model (so the first launch
+works offline), the bridge DLLs, and camera-by-name support.
+
+Double-click `Eyetracker.exe` and the preview window opens — that window is
+the whole UI. Everything the app writes goes to `%APPDATA%\Eyetracker`:
+
+| File | What it is |
+|---|---|
+| `Eyetracker.log` | every line the tracker prints, always logged |
+| `eyetrack.json` | your config (created on first run) |
+| `calibration.json` | calibration result |
+| `bridge\NPClient*.dll` | staged for the games — a one-file build unpacks into a temp folder that is deleted on exit, so the DLLs are copied somewhere permanent first |
+
+Options still work when you launch it from a terminal or script; with no
+console the same text appears in a dialog (set `EYE_TRACKER_NO_DIALOG=1`
+to suppress that for unattended runs):
+
+```
+Eyetracker.exe --list-cameras    # dialog listing your cameras
+Eyetracker.exe --list-games      # the game preset matrix
+Eyetracker.exe --paths           # where config, model, DLLs and log live
+Eyetracker.exe --mouse           # head-to-cursor output
+Eyetracker.exe --game ets2       # apply a preset + print its setup notes
+```
+
+Good to know:
+
+* The first launch of the one-file build takes a few seconds (it unpacks
+  itself); `--onedir` starts instantly if that bothers you.
+* The registered game-link path follows **how you launch**: the exe
+  registers `%APPDATA%\Eyetracker\bridge`, `run.bat` registers the
+  repository's `bridge\`. Both work — whichever you used last is active,
+  and `Eyetracker.exe --install-bridge` / `run.bat --install-bridge` switch.
+* Nothing changes for running from source: same code, same config format.
+
+---
+
 ## Game support
 
 One tracker, every game. `run.bat --list-games` shows the built-in presets;
@@ -301,15 +349,17 @@ Repository layout:
 |---|---|
 | `eyetrack/` | the tracker: capture → head pose → calibration → filter → outputs |
 | `eyetrack/outputs/` | game links: shared memory (TrackIR), UDP JSON (Minecraft), opentrack UDP, mouse |
+| `packaging/` | PyInstaller spec + launcher for the standalone exe |
 | `bridge/` | our own NPClient DLL: C sources, prebuilt DLLs, `NOTICE.txt` (ABI provenance) |
 | `minecraft-mod/` | Fabric mod for Minecraft 26.2 |
 | `tools/` | `fake_tracker.py` (synthetic motion), `inspect_pose.py` (pose debugging) |
 | `tests/` | pytest suite: protocol, shared memory, DLL ABI roundtrip, mouse, presets |
 
 ```
-# tracker tests (53 tests: filters, calibration, UDP formats, shared memory,
-# mouse mapping, game presets, standalone-without-opentrack guarantees, and a
-# full writer -> bridge DLL roundtrip incl. ABI checksum verification)
+# tracker tests (70 tests: filters, calibration, UDP formats, shared memory,
+# mouse mapping, game presets, standalone-without-opentrack guarantees,
+# packaging paths and a full writer -> bridge DLL roundtrip incl. ABI
+# checksum verification)
 .venv/Scripts/python -m pytest
 
 # mod tests + build (3 protocol tests + compile against MC 26.2)
@@ -317,6 +367,9 @@ cd minecraft-mod && gradlew test build
 
 # rebuild the bridge DLL after changing bridge/src
 bridge\build.bat
+
+# build the standalone exe (see packaging/eyetracker.spec)
+build_exe.bat
 ```
 
 Protocol notes:

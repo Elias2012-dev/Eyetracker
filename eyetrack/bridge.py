@@ -21,11 +21,16 @@ whatever was there).
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from pathlib import Path
 
-BRIDGE_DIR = Path(__file__).resolve().parent.parent / "bridge"
-BACKUP_FILE = Path(__file__).resolve().parent.parent / "bridge_registry_backup.json"
+from .paths import FROZEN, backup_path, bridge_dir, data_dir
+
+# Read-only: shipped with the app (repo root, or the frozen bundle).
+BRIDGE_DIR = bridge_dir()
+# Writable: lives next to the config, not inside the bundle.
+BACKUP_FILE = backup_path()
 
 KEYS = [
     (r"Software\NaturalPoint\NATURALPOINT\NPClient Location", "Path"),
@@ -37,6 +42,35 @@ REQUIRED_DLLS = ["NPClient.dll", "NPClient64.dll"]
 
 def _missing_dlls() -> list[str]:
     return [n for n in REQUIRED_DLLS if not (BRIDGE_DIR / n).exists()]
+
+
+def game_dir() -> Path:
+    """The folder whose path we hand to the games.
+
+    From source that is the repository's ``bridge/``. A one-file build is
+    different: it unpacks into ``%TEMP%\\_MEIxxxxx`` and that directory is
+    deleted when the tracker quits, so registering it would leave the games
+    pointing at nothing after the first exit. Frozen builds therefore copy
+    the two DLLs next to the config first - a stable, writable location
+    that outlives the process.
+    """
+    if not FROZEN:
+        return BRIDGE_DIR
+    target = data_dir() / "bridge"
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        for name in REQUIRED_DLLS:
+            src = BRIDGE_DIR / name
+            dst = target / name
+            if src.exists() and (not dst.exists()
+                                 or dst.stat().st_size != src.stat().st_size):
+                shutil.copy2(src, dst)
+    except OSError as exc:
+        print(f"[game-link] could not stage the DLLs in {target}: {exc} - "
+              "falling back to the bundled folder (the games will only see "
+              "tracking while the tracker is running)")
+        return BRIDGE_DIR
+    return target
 
 
 def _current_path(subkey: str, value_name: str) -> str | None:
@@ -61,7 +95,7 @@ def install() -> None:
 
     import winreg
 
-    target = str(BRIDGE_DIR)
+    target = str(game_dir())
     backup: dict[str, str | None] = {}
     if BACKUP_FILE.exists():
         try:
@@ -127,12 +161,12 @@ def ensure(auto: bool = True) -> None:
               + ", ".join(missing) + ") - run bridge\\build.bat. "
               "The tracker will still stream; games just cannot see it yet.")
         return
-    target = str(BRIDGE_DIR)
+    target = str(game_dir())
     owned = all(_current_path(sk, vn) == target for sk, vn in KEYS)
     if owned:
         return
     if auto:
-        print("[game-link] registering our NPClient bridge for ETS2/ATS...")
+        print(f"[game-link] registering our NPClient bridge for TrackIR games -> {target}")
         install()
     else:
         print("[game-link] bridge not registered - run once: run.bat --install-bridge")

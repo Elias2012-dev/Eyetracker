@@ -13,9 +13,10 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from .paths import calibration_path
 from .pose import DEFAULT_PITCH_SCALE, DEFAULT_YAW_SCALE, HeadPose
 
-CALIBRATION_FILE = Path(__file__).resolve().parent.parent / "calibration.json"
+CALIBRATION_FILE = calibration_path()
 
 
 @dataclass

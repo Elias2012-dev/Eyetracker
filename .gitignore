@@ -16,6 +16,9 @@ minecraft-mod/run/
 # TinyCC, fetched by bridge\build.bat on demand
 bridge/tools/
 
+# PyInstaller output (build_exe.bat)
+dist/
+
 # MediaPipe model, downloaded automatically on first run
 models/*.task
 

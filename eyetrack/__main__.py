@@ -3,13 +3,39 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import sys
 from pathlib import Path
 
 from . import __version__
 from .config import Config
+from .console import attach_log, show_message
+from .paths import config_path
 
-DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "eyetrack.json"
+DEFAULT_CONFIG = config_path()
+
+
+def _report(title: str, fn) -> int:
+    """Run a short command and mirror its output.
+
+    In a console build the text simply prints. The windowed exe has no
+    console, so the same text is shown as a message box (and written to
+    the log).
+    """
+    buf = io.StringIO()
+    code = 0
+    with contextlib.redirect_stdout(buf):
+        try:
+            fn()
+        except SystemExit as exc:
+            code = exc.code if isinstance(exc.code, int) else 1
+            buf.write(f"\n{exc}\n")
+    text = buf.getvalue().strip()
+    if text:
+        print(text)
+    show_message(title, text)
+    return code
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -60,29 +86,31 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--recenter-on-start", action="store_true",
                    help="re-centre once the first face frame arrives")
     p.add_argument("--list-cameras", action="store_true", help="probe cameras and exit")
+    p.add_argument("--paths", action="store_true",
+                   help="show where config, model, DLLs and the log live, and exit")
     p.add_argument("--version", action="version", version=f"eyetrack {__version__}")
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
+    attach_log()  # no-op unless this is the windowed exe
     args = _parse_args(argv if argv is not None else sys.argv[1:])
 
+    if args.paths:
+        from .paths import describe
+        return _report("Eyetracker - paths", lambda: print(describe()))
     if args.uninstall_bridge:
         from .bridge import uninstall
-        uninstall()
-        return 0
+        return _report("Eyetracker - bridge removed", uninstall)
     if args.install_bridge:
         from .bridge import install
-        install()
-        return 0
+        return _report("Eyetracker - bridge installed", install)
     if args.list_cameras:
         from .app import list_cameras
-        list_cameras()
-        return 0
+        return _report("Eyetracker - cameras", list_cameras)
     if args.list_games:
         from .presets import print_catalog
-        print_catalog()
-        return 0
+        return _report("Eyetracker - game support", print_catalog)
 
     cfg = Config.load(args.config)
 
@@ -90,7 +118,12 @@ def main(argv: list[str] | None = None) -> int:
     changed = False
     if args.game is not None:
         from .presets import apply_preset
-        preset = apply_preset(args.game, cfg)
+        try:
+            preset = apply_preset(args.game, cfg)
+        except SystemExit as exc:
+            print(str(exc))
+            show_message("Eyetracker - unknown game", str(exc))
+            return 2
         print(f"[eyetrack] game preset: {preset.title}")
         for note in preset.notes:
             print(f"  - {note}")

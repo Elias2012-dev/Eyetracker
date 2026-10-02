@@ -27,11 +27,13 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from .paths import data_dir, model_path
+
 MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/face_landmarker/"
     "face_landmarker/float16/1/face_landmarker.task"
 )
-DEFAULT_MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "face_landmarker.task"
+DEFAULT_MODEL_PATH = model_path()
 
 # --- 478-point face mesh landmark indices (verified with tools/inspect_pose.py)
 NOSE_TIP = 4
@@ -75,12 +77,21 @@ def geometry_proxies(lms: np.ndarray) -> tuple[float, float, float, float]:
 
 
 def ensure_model(path: Path | None = None) -> Path:
-    path = Path(path) if path else DEFAULT_MODEL_PATH
-    if not path.exists():
+    path = Path(path) if path else model_path()
+    if path.exists():
+        return path
+    try:
         path.parent.mkdir(parents=True, exist_ok=True)
         print(f"[pose] downloading face landmarker model -> {path}")
         urllib.request.urlretrieve(MODEL_URL, path)
-    return path
+        return path
+    except OSError:
+        # Read-only bundle directory: retry in the writable per-user one.
+        fallback = data_dir() / "models" / "face_landmarker.task"
+        fallback.parent.mkdir(parents=True, exist_ok=True)
+        print(f"[pose] downloading face landmarker model -> {fallback}")
+        urllib.request.urlretrieve(MODEL_URL, fallback)
+        return fallback
 
 
 @dataclass
