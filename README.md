@@ -450,6 +450,26 @@ and every pull request — see the badge at the top. The workflow
 shared-memory, registry and DLL tests skip themselves elsewhere, and the
 mod needs JDK 25 to compile.
 
+### Cutting a release
+
+Push a `v*` tag and the Release workflow builds both artifacts on a Windows
+runner and attaches them to the GitHub Release for that tag:
+
+```bash
+git tag -a v1.3.0 -m "v1.3.0" && git push origin v1.3.0
+```
+
+The checkout is pinned to the tag, so the published assets always come from
+the commit the tag names. Before uploading, the workflow smoke-tests the exe
+(it must unpack, import, and actually contain the bundled face model), and
+asserts the jar is non-empty. Re-running a tag is safe — assets are
+clobbered rather than duplicated. You can also trigger it by hand from the
+Actions tab with an existing tag.
+
+`models/*.task` is gitignored, so a clean runner has no face model; the
+build fetches it from the same URL the app uses at runtime, and the
+PyInstaller spec now aborts rather than quietly shipping an exe without it.
+
 Protocol notes:
 
 * **Minecraft stream** — UTF-8 JSON datagram, one object per packet:
