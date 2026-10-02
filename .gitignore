@@ -1,0 +1,10 @@
+.venv/
+.jdk/
+__pycache__/
+*.pyc
+.gradle/
+build/
+out/
+*.log
+eyetrack.json
+bridge_registry_backup.json

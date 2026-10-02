@@ -1,0 +1,4 @@
+mediapipe>=1.0.0
+opencv-python>=4.9
+numpy>=1.26
+pygrabber>=0.2; sys_platform == "win32"
