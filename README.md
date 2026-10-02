@@ -460,11 +460,25 @@ mod needs JDK 25 to compile.
 
 ### Cutting a release
 
-Push a `v*` tag and the Release workflow builds both artifacts on a Windows
-runner and attaches them to the GitHub Release for that tag:
+```bash
+python tools/release.py 1.4.0              # check, tag, push
+python tools/release.py 1.4.0 --dry-run    # checks only, changes nothing
+python tools/release.py 1.4.0 --build      # ...and build + smoke-test locally
+```
+
+The script **refuses to run on a dirty tree** — a release must be
+reproducible from its tag, and uncommitted changes are not in the tag. It
+also fails early on a malformed version, a tag that already exists, unpushed
+commits, a missing face model, and missing bridge DLLs. With `--build` it
+reproduces the exe and jar locally first, so a broken packaging change
+surfaces on your machine instead of in the Actions log after the tag is
+already public.
+
+It then pushes the tag, and the Release workflow builds both artifacts on a
+Windows runner and attaches them to the GitHub Release:
 
 ```bash
-git tag -a v1.3.0 -m "v1.3.0" && git push origin v1.3.0
+git tag -a v1.3.0 -m "v1.3.0" && git push origin v1.3.0   # what the script does
 ```
 
 The checkout is pinned to the tag, so the published assets always come from
