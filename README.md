@@ -1,6 +1,7 @@
 # Eyetracker
 
 [![Downloads](https://img.shields.io/github/downloads/Elias2012-dev/Eyetracker/total?style=flat-square&label=downloads)](https://github.com/Elias2012-dev/Eyetracker/releases)
+[![CI](https://github.com/Elias2012-dev/Eyetracker/actions/workflows/ci.yml/badge.svg)](https://github.com/Elias2012-dev/Eyetracker/actions/workflows/ci.yml)
 
 Free head/eye tracking for your webcam — no TrackIR, no Tobii, no FreeTrack,
 no extra software. One tracker feeds every game:
@@ -8,7 +9,7 @@ no extra software. One tracker feeds every game:
 | Target | How it connects |
 |---|---|
 | **Minecraft 26.2** (Fabric mod in this repo) | UDP JSON packets on `127.0.0.1:47777` |
-| **Any TrackIR game** — ETS2/ATS, MSFS, DCS, X-Plane 12, War Thunder, ACC, DayZ, IL-2, … | **Built-in game link** — our own NPClient DLL + shared memory, registered automatically |
+| **Any TrackIR game** — ETS2/ATS, MSFS, DCS, X-Plane 12, War Thunder, ACC, DayZ, IL-2, FS22/FS25, … | **Built-in game link** — our own NPClient DLL + shared memory, registered automatically |
 | **Any mouse-look game** (no TrackIR support required) | **Mouse emulation** — your head drives the cursor (`F9` arms/disarms) |
 
 ```
@@ -427,10 +428,10 @@ Repository layout:
 | `tests/` | pytest suite: protocol, shared memory, DLL ABI roundtrip, mouse, presets |
 
 ```
-# tracker tests (68 tests: filters, calibration, UDP formats, shared memory,
-# mouse mapping, game presets, packaging paths, zero-external-tracker
-# guarantees, and a full writer -> bridge DLL roundtrip incl. ABI checksum
-# verification)
+# tracker tests (115 tests: filters, calibration, UDP formats, shared memory,
+# mouse mapping, camera selection, HUD rendering, game presets, packaging
+# paths, zero-external-tracker guarantees, and a full writer -> bridge DLL
+# roundtrip incl. ABI checksum verification)
 .venv/Scripts/python -m pytest
 
 # mod tests + build (3 protocol tests + compile against MC 26.2)
@@ -442,6 +443,12 @@ bridge\build.bat
 # build the standalone exe (see packaging/eyetracker.spec)
 build_exe.bat
 ```
+
+Both suites run automatically on GitHub Actions for every push to `main`
+and every pull request — see the badge at the top. The workflow
+(`.github/workflows/ci.yml`) runs on Windows for both jobs: the tracker's
+shared-memory, registry and DLL tests skip themselves elsewhere, and the
+mod needs JDK 25 to compile.
 
 Protocol notes:
 
