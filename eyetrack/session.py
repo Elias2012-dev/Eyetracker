@@ -27,6 +27,13 @@ from .pose import HeadPose, HeadPoseEstimator
 
 # Short labels for the HUD's output chips. The full names are too long to
 # fit three to a row, and "the stream is on" is the question being asked.
+# How long a pose must hold still before a calibration step captures itself,
+# and how much movement counts as "still". The pose is in proxy units where
+# a full comfortable head turn is a couple of units, so 0.02 is well below
+# breathing and well above tracker jitter.
+CALM_HOLD_S = 1.0
+CALM_MOVE_EPS = 0.02
+
 CHIP_LABELS = {
     "game-link": "TrackIR",
     "udp": "Minecraft",
@@ -137,6 +144,8 @@ class TrackingSession:
         self._t_last = 0.0
         self._auto_recentered = False
         self._bridge_ready = False
+        # (yaw, pitch, t) of the pose we are waiting to become "settled".
+        self._calib_ref: tuple[float, float, float] | None = None
         self.status = ""
 
     # ------------------------------------------------------------------
@@ -243,6 +252,7 @@ class TrackingSession:
                 out.message = "re-centred"
             values = apply_gains(self.cfg, self.calib.apply(pose))
             self.values = self.filt.apply(values, t)
+            self._autostep_calibration(t)
 
         out.values = self.values
         out.tracking = bool(pose.detected)
@@ -252,6 +262,33 @@ class TrackingSession:
     def _fan_out(self, values: dict, tracking: bool, t: float) -> None:
         for sink in self.outputs:
             sink.send(values, tracking, t)
+
+    def _autostep_calibration(self, now: float) -> bool:
+        """Capture a calibration step by holding still.
+
+        A five-pose wizard that needs five SPACE presses is a wizard people
+        never finish, especially the first time. Holding each pose for a
+        moment is unambiguous - the face has stopped moving - so the step
+        takes itself and the keys stay optional.
+        """
+        wizard = self.wizard
+        pose = self.last_raw
+        if wizard is None or wizard.done or wizard.cancelled or pose is None:
+            return False
+
+        yaw, pitch = pose.proxy_yaw, pose.proxy_pitch
+        if self._calib_ref is None:
+            self._calib_ref = (yaw, pitch, now)
+            return False
+
+        ref_yaw, ref_pitch, ref_at = self._calib_ref
+        if abs(yaw - ref_yaw) + abs(pitch - ref_pitch) > CALM_MOVE_EPS:
+            self._calib_ref = (yaw, pitch, now)      # still moving; restart
+            return False
+        if now - ref_at < CALM_HOLD_S:
+            return False
+        self._calib_ref = None
+        return self.submit_calibration()
 
     def chips(self, tracking: bool) -> tuple:
         return output_chips(self.outputs, tracking)
@@ -271,11 +308,13 @@ class TrackingSession:
         self.wizard = CalibrationWizard(self.cfg.pose.yaw_range,
                                         self.cfg.pose.pitch_range,
                                         self.cfg.pose.reference_distance_cm)
+        self._calib_ref = None
         return self.wizard
 
     def cancel_calibration(self) -> None:
         if self.wizard is not None:
             self.wizard.cancel()
+        self._calib_ref = None
 
     def submit_calibration(self) -> bool:
         """Capture the current pose; returns True once it produced a result."""

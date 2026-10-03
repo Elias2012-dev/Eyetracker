@@ -94,8 +94,16 @@ class TrackerController:
             return False
         self.session = session
         self.running = True
-        self.status = "Tracking"
-        self.detail = f"camera {self.cfg.camera.index} - outputs: {session.describe_outputs()}"
+        if session.wizard is not None:
+            # First run: the wizard is already up, and each step captures
+            # itself once you hold still. No button to find, no keys to press.
+            self.status = "Calibrating"
+            self.detail = ("first run - follow the prompts and hold each pose "
+                           "still; it captures itself. ESC skips.")
+        else:
+            self.status = "Tracking"
+            self.detail = (f"camera {self.cfg.camera.index} - outputs: "
+                           f"{session.describe_outputs()}")
         return True
 
     def stop(self) -> None:

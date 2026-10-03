@@ -37,7 +37,14 @@ class Calibration:
 
     # ------------------------------------------------------------------
     def center_from(self, pose: HeadPose) -> None:
-        """Re-centre on the current (assumed neutral) pose."""
+        """Re-centre on the current (assumed neutral) pose.
+
+        Deliberately does *not* set ``valid``. Centring is not calibrating:
+        the wizard measures the yaw/pitch scale, and only
+        :meth:`CalibrationWizard.result` may claim that. Marking a bare
+        centre as valid meant the first detected frame of the very first run
+        saved a "calibrated" file, so every later launch skipped the wizard.
+        """
         self.proxy_yaw_center = pose.proxy_yaw
         self.proxy_pitch_center = pose.proxy_pitch
         self.roll_center = pose.roll
@@ -45,7 +52,6 @@ class Calibration:
         self.y_center = pose.ty
         if pose.face_px > 0:
             self.face_px_ref = pose.face_px
-        self.valid = True
 
     def apply(self, pose: HeadPose) -> dict[str, float]:
         """Turn a raw :class:`HeadPose` into a centred 6-DOF pose dict."""
@@ -86,11 +92,11 @@ class WizardStep:
 
 
 STEPS: list[WizardStep] = [
-    WizardStep("center", "Look straight ahead at the camera - press SPACE", (0.5, 0.5)),
-    WizardStep("left", "Turn your head LEFT (keep body still) - press SPACE", (0.85, 0.5)),
-    WizardStep("right", "Turn your head RIGHT - press SPACE", (0.15, 0.5)),
-    WizardStep("up", "Look UP (chin up) - press SPACE", (0.5, 0.15)),
-    WizardStep("down", "Look DOWN (chin down) - press SPACE", (0.5, 0.85)),
+    WizardStep("center", "Look straight ahead at the camera - hold still", (0.5, 0.5)),
+    WizardStep("left", "Turn your head LEFT (body still) - hold still", (0.85, 0.5)),
+    WizardStep("right", "Turn your head RIGHT - hold still", (0.15, 0.5)),
+    WizardStep("up", "Look UP (chin up) - hold still", (0.5, 0.15)),
+    WizardStep("down", "Look DOWN (chin down) - hold still", (0.5, 0.85)),
 ]
 
 

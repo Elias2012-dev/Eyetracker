@@ -186,6 +186,10 @@ reliable.
 
 Needs **Fabric Loader** and **Fabric API** installed in Minecraft first.
 
+> **The one step people miss: press `H` in game.** The mod loads and waits
+> — it does not start tracking by itself, so a perfectly working tracker
+> looks exactly like a broken mod. Full guide: **[MINECRAFT.md](MINECRAFT.md)**.
+
 > **Already installed the old mod?** Delete `freebuff-eyetrack-1.0.0.jar`
 > from `mods` before adding the new one. Fabric identifies mods by id, and
 > the id changed to `eyetrack`, so leaving the old jar in place loads two

@@ -66,7 +66,7 @@ away from where you left off. There is nothing to confirm or submit.
 | ETS2 / ATS | *Options → Gameplay → TrackIR* on |
 | Farming Simulator 25 / 22 | *Options → General → head tracking* on |
 | MSFS, DCS, X-Plane 12, War Thunder, ACC, DayZ, IL-2 | enable head tracking in the game; it loads our DLL from the standard registry key |
-| Minecraft 26.2 | drop [`eyetrack-1.0.0.jar`](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/eyetrack-1.0.0.jar) into `mods` (needs Fabric Loader + Fabric API), then press **`H` in game** — the mod starts off, and says so on the first line when you join a world |
+| Minecraft 26.2 | drop [`eyetrack-1.0.0.jar`](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/eyetrack-1.0.0.jar) into `mods` (needs Fabric Loader + Fabric API), then press **`H` in game** — the mod starts off, and says so on the first line when you join a world. Full guide: **[MINECRAFT.md](MINECRAFT.md)** |
 | Anything with mouse-look | `Eyetracker.exe --mouse`, then press `F9` to arm |
 
 </details>
