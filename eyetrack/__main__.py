@@ -43,6 +43,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         prog="eyetrack",
         description="Free webcam head-tracking for Minecraft, TrackIR games "
                     "and mouse-look games.",
+        epilog="Run with no arguments to open the settings window, where you "
+               "can pick a camera and start or stop tracking.",
     )
     p.add_argument("--config", type=Path, default=DEFAULT_CONFIG,
                    help=f"config file (default: {DEFAULT_CONFIG.name})")
@@ -64,6 +66,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--width", type=int, help="capture width")
     p.add_argument("--height", type=int, help="capture height")
     p.add_argument("--fps", type=int, help="capture fps")
+    p.add_argument("--gui", dest="gui", action="store_true", default=None,
+                   help="open the settings window (pick a camera, set things "
+                        "up, start/stop tracking)")
+    p.add_argument("--no-gui", dest="gui", action="store_false", default=None,
+                   help="skip the settings window and track straight away")
     p.add_argument("--no-overlay", action="store_true", help="disable the preview window")
     p.add_argument("--compact", dest="compact", action="store_true", default=None,
                    help="small numbers-only HUD instead of the camera view")
@@ -128,6 +135,13 @@ def main(argv: list[str] | None = None) -> int:
         from .presets import print_catalog
         return _report("Eyetracker - game support", print_catalog)
 
+    # Anything that runs a command and exits has been handled by now, so
+    # what is left is "track". A settings window is the friendlier default
+    # for a double-clicked exe; --no-gui (and --first-run, which has its own
+    # guided flow) opt out of it.
+    from_commands = args.first_run or args.calibrate or args.pick_camera
+    want_gui = args.gui if args.gui is not None else not from_commands
+
     cfg = Config.load(args.config)
 
     # CLI overrides (persisted so the next run keeps them).
@@ -190,6 +204,12 @@ def main(argv: list[str] | None = None) -> int:
     setup = args.first_run is not False and (first_launch or args.first_run)
     if setup:
         print("[setup] first run - finding a camera and setting up calibration.")
+
+    if want_gui:
+        from .gui import main as gui_main
+        print("[gui] opening the settings window - press Start to track.")
+        return gui_main(cfg, args.config)
+
     return run(cfg, config_path=args.config,
                start_wizard=args.calibrate,
                recenter_on_start=args.recenter_on_start,

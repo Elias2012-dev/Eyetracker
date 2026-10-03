@@ -78,7 +78,7 @@ def test_an_opencv_failure_disables_the_splash_instead_of_propagating(monkeypatc
     assert s.enabled is False, "it should have given up quietly"
 
 
-def test_the_splash_is_shown_while_the_camera_is_being_found(monkeypatch):
+def test_the_splash_is_shown_while_the_camera_is_being_found(monkeypatch, tmp_path):
     """app._auto_detect has to report progress, not sit in silence."""
     import eyetrack.app as app
 
@@ -100,7 +100,7 @@ def test_the_splash_is_shown_while_the_camera_is_being_found(monkeypatch):
         def close(self):
             pass
 
-    monkeypatch.setattr(app, "Splash", lambda **_k: _Recorder())
+    monkeypatch.setattr("eyetrack.splash.Splash", lambda **_k: _Recorder())
 
     from eyetrack.cameras import CameraDevice
     from eyetrack.config import Config
@@ -115,7 +115,7 @@ def test_the_splash_is_shown_while_the_camera_is_being_found(monkeypatch):
 
     monkeypatch.setattr("eyetrack.autodetect.detect_camera", fake_detect)
 
-    app._auto_detect(Config(), __import__("pathlib").Path("unused.json"),
+    app._auto_detect(Config(), tmp_path / "eyetrack.json",
                      estimator=object())
 
     assert seen, "nothing was reported to the user while probing"

@@ -1,4 +1,11 @@
-"""Main application loop: camera -> pose -> calibrate -> filter -> outputs."""
+"""Console/overlay entry point: camera -> pose -> calibrate -> filter -> outputs.
+
+The pipeline itself lives in :mod:`eyetrack.session`; this module is the
+front end that owns the HUD window and the keyboard, and the one-shot
+commands (``--list-cameras``, ``--paths``, ``--pick-camera``). The settings
+window in :mod:`eyetrack.gui` drives the very same session, so there is
+only ever one implementation of the tracking machine.
+"""
 
 from __future__ import annotations
 
@@ -9,23 +16,11 @@ from pathlib import Path
 import cv2
 
 from .autodetect import CameraProbe
-from .calibrate import Calibration, CalibrationWizard
 from .config import Config
-from .filters import PoseFilter
 from .overlay import Overlay
-from .outputs import build_outputs
-from .pose import HeadPose, HeadPoseEstimator
-from .splash import Splash
+from .pose import HeadPoseEstimator
+from .session import TrackingSession
 
-# Short labels for the rail's output chips. The full names are too long to
-# fit three to a row, and "the stream is on" is the question being asked.
-CHIP_LABELS = {
-    "game-link": "TrackIR",
-    "udp": "Minecraft",
-    "mouse": "Mouse",
-}
-
-HELP_STATUS = "press H for the key list"
 SETUP_STATUS = "first run - C skips setup and starts tracking anyway"
 
 
@@ -52,26 +47,6 @@ def _prompt_for_camera(cfg: Config, config_path: Path) -> None:
         cfg.save(config_path)
     except OSError as exc:
         print(f"[eyetrack] warning: could not save config: {exc}")
-
-
-def open_camera(cfg: Config):
-    from .cameras import resolve_index
-
-    index = resolve_index(cfg.camera.device_name, cfg.camera.index)
-    cap = cv2.VideoCapture(index)
-    if not cap.isOpened():
-        raise SystemExit(f"Could not open camera index {index} "
-                         f"(name filter: {cfg.camera.device_name or '-'}). "
-                         "Try --pick-camera to choose from a list, "
-                         "--list-cameras, --camera N or --camera-name NAME.")
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.camera.width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.camera.height)
-    cap.set(cv2.CAP_PROP_FPS, cfg.camera.fps)
-    try:
-        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
-    except cv2.error:
-        pass
-    return cap
 
 
 def list_cameras(max_index: int = 10) -> None:
@@ -101,40 +76,6 @@ def list_cameras(max_index: int = 10) -> None:
         print(f"  camera {i}: {w}x{h}")
 
 
-def _apply_gains(cfg: Config, pose: dict[str, float]) -> dict[str, float]:
-    p = cfg.pose
-
-    def s(v: float, gain: float, invert: bool) -> float:
-        return -v * gain if invert else v * gain
-
-    return {
-        "yaw": s(pose["yaw"], p.yaw_gain, p.invert_yaw),
-        "pitch": s(pose["pitch"], p.pitch_gain, p.invert_pitch),
-        "roll": s(pose["roll"], p.roll_gain, p.invert_roll),
-        "x": s(pose["x"], p.x_gain, p.invert_x),
-        "y": s(pose["y"], p.y_gain, p.invert_y),
-        "z": s(pose["z"], p.z_gain, p.invert_z),
-    }
-
-
-def _output_chips(outputs, tracking: bool) -> tuple:
-    """``(label, active)`` pairs for the rail's output chips.
-
-    An output is only "active" while a face is being tracked, because that
-    is exactly when it is actually sending: a disabled-but-configured sink
-    would otherwise look like it is working.
-    """
-    chips = []
-    for out in outputs:
-        label = CHIP_LABELS.get(out.name, out.name)
-        if out.name == "mouse":
-            active = tracking and getattr(out, "active", True)
-        else:
-            active = tracking
-        chips.append((label, bool(active)))
-    return tuple(chips)
-
-
 def _auto_detect(cfg: Config, config_path: Path, estimator) -> CameraProbe | None:
     """Find a camera that actually shows a face, and remember it.
 
@@ -143,6 +84,7 @@ def _auto_detect(cfg: Config, config_path: Path, estimator) -> CameraProbe | Non
     would land in the wizard with no image to calibrate against.
     """
     from .autodetect import detect_camera
+    from .splash import Splash
 
     def detect(frame):
         return estimator.process(frame, int(time.monotonic() * 1000)).detected
@@ -189,97 +131,64 @@ def _auto_detect(cfg: Config, config_path: Path, estimator) -> CameraProbe | Non
 def run(cfg: Config, *, config_path: Path, start_wizard: bool = False,
         recenter_on_start: bool = False, pick_camera: bool = False,
         first_run: bool = False) -> int:
-    estimator = HeadPoseEstimator()
+    """Run the tracker with the HUD until the user quits.
+
+    This is the front end used when the app is launched without a display
+    to put a settings panel in - from a terminal, a shortcut, or a script.
+    """
+    estimator = None
     if first_run:
         # Before the camera is opened: picking the right index first avoids
         # failing on a camera that was never going to work.
+        estimator = HeadPoseEstimator()
         _auto_detect(cfg, config_path, estimator)
+        estimator.close()
+        estimator = None
         # Always calibrate on a fresh install - the default pose mapping is
         # a guess, and one wrong guess means every game looks wrong.
         start_wizard = True
     elif pick_camera:
         _prompt_for_camera(cfg, config_path)
+
     print("[eyetrack] starting camera", cfg.camera.index)
-    cap = open_camera(cfg)
-
-    calib = Calibration.load()
-    calib.reference_distance_cm = cfg.pose.reference_distance_cm
-    filt = PoseFilter(cfg.filter)
-
-    if cfg.game_link.enabled:
-        from .bridge import ensure as ensure_bridge
-        ensure_bridge(auto=cfg.game_link.auto_bridge)
-
-    outputs = build_outputs(cfg)
-    for out in outputs:
-        out.start()
-        print(f"[eyetrack] output enabled: {out.name}")
+    session = TrackingSession(cfg, config_path, start_wizard=start_wizard,
+                              recenter_on_start=recenter_on_start)
+    session.start()
 
     overlay = Overlay(cfg.overlay.window, cfg.overlay.show_mesh,
                       top_most=cfg.overlay.top_most, compact=cfg.overlay.compact,
                       yaw_range=cfg.pose.yaw_range,
                       pitch_range=cfg.pose.pitch_range,
                       roll_range=cfg.pose.roll_range) if cfg.overlay.enabled else None
-    wizard = CalibrationWizard(cfg.pose.yaw_range, cfg.pose.pitch_range,
-                               cfg.pose.reference_distance_cm) if start_wizard else None
 
-    last_raw: HeadPose | None = None
-    last_out = {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "x": 0.0, "y": 0.0, "z": 0.0}
-    fps_ema = 0.0
-    t_last = time.monotonic()
-    auto_recentered = False
-    status = SETUP_STATUS if (first_run and wizard is not None) else HELP_STATUS
+    status = SETUP_STATUS if (first_run and session.wizard is not None) else ""
+    skipped_setup = False
 
     try:
         while True:
-            ok, frame = cap.read()
-            if not ok:
-                if overlay is None:
-                    print("[eyetrack] camera read failed, retrying...")
-                    time.sleep(0.2)
-                    continue
-                frame = None  # will be handled below
+            res = session.step()
 
-            t = time.monotonic()
-            dt = t - t_last
-            t_last = t
-            if dt > 0:
-                fps_ema = fps_ema * 0.9 + (1.0 / dt) * 0.1 if fps_ema else 1.0 / dt
+            if res.message:
+                status = res.message
 
-            pose = HeadPose()
-            if frame is not None:
-                pose = estimator.process(frame, int(t * 1000))
+            if not res.ok and overlay is None:
+                print("[eyetrack] camera read failed, retrying...")
+                time.sleep(0.2)
+                continue
 
-            if pose.detected:
-                last_raw = pose
-                if not calib.valid:
-                    # First run: assume the user starts facing the screen.
-                    calib.center_from(pose)
-                    calib.save()
-                    status = "auto-centred on first frame"
-                elif recenter_on_start and not auto_recentered:
-                    calib.center_from(pose)
-                    filt.reset()
-                    auto_recentered = True
-                    status = "re-centred"
-                last_out = _apply_gains(cfg, calib.apply(pose))
-                last_out = filt.apply(last_out, t)
-
-            tracking = bool(pose.detected)
-            for out in outputs:
-                out.send(last_out, tracking, t)
-
-            if overlay is not None and frame is not None:
-                chips = _output_chips(outputs, tracking)
-                key = overlay.draw(frame, pose, last_out, tracking, fps_ema,
-                                   cfg.camera.mirror, wizard, status, chips)
+            if overlay is not None and res.frame is not None:
+                key = overlay.draw(res.frame, res.pose, res.values, res.tracking,
+                                   res.fps, cfg.camera.mirror, session.wizard,
+                                   status, session.chips(res.tracking))
                 status = ""
                 # On a fresh install ESC means "skip setup and just track":
                 # quitting outright leaves someone who only wanted to try it
                 # with no camera chosen and no calibration at all.
-                if key == 27 and first_run and wizard is not None:
-                    wizard.cancel()
-                    first_run = False
+                if key == 27 and first_run and not skipped_setup \
+                        and session.wizard is not None:
+                    session.cancel_calibration()
+                    session.wizard = None
+                    skipped_setup = True
                     status = "setup skipped - press C any time to calibrate"
                     print("[setup] skipped calibration; tracking anyway "
                           "(press C to redo)")
@@ -287,57 +196,28 @@ def run(cfg: Config, *, config_path: Path, start_wizard: bool = False,
                 if overlay.window_closed() or key in (ord("q"), 27):
                     break
                 if key == ord("c"):
-                    wizard = CalibrationWizard(cfg.pose.yaw_range, cfg.pose.pitch_range,
-                                               cfg.pose.reference_distance_cm)
+                    session.begin_calibration()
                     status = SETUP_STATUS if first_run else "calibration started"
                 elif key == ord("r"):
-                    if last_raw is not None:
-                        calib.center_from(last_raw)
-                        calib.save()
-                        filt.reset()
-                        status = "re-centred"
+                    status = "re-centred" if session.recentre() else "no face yet"
                 elif key == ord("h"):
                     status = ("help hidden - press H to show it again"
                               if overlay.toggle_help() else "")
                 elif key == ord("m"):
                     status = "face mesh off" if not overlay.toggle_mesh() else ""
                 elif key == ord("f"):
-                    cfg.overlay.compact = overlay.set_compact(
-                        not overlay.compact)
+                    cfg.overlay.compact = overlay.set_compact(not overlay.compact)
                     cfg.overlay.show_mesh = overlay.show_mesh
-                    status = "compact HUD - press F for the camera view" \
-                        if overlay.compact else "camera view"
-                    try:
-                        cfg.save(config_path)
-                    except OSError:
-                        pass
-                elif key == ord(" ") and wizard is not None:
-                    if last_raw is not None:
-                        wizard.submit(last_raw)
-                    if wizard.done:
-                        result = wizard.result(calib)
-                        if result is not None:
-                            calib = result
-                            calib.save()
-                            filt.reset()
-                            try:
-                                cfg.save(config_path)
-                            except OSError:
-                                pass
-                            print("[eyetrack] calibration saved")
-                        else:
-                            print("[eyetrack] calibration incomplete - press C to retry")
-                elif overlay.window_closed():
-                    break
+                    status = ("compact HUD - press F for the camera view"
+                              if overlay.compact else "camera view")
+                    session.save_config()
+                elif key == ord(" ") and session.wizard is not None:
+                    session.submit_calibration()
     except KeyboardInterrupt:
         print("\n[eyetrack] interrupted")
     finally:
-        cap.release()
-        estimator.close()
-        for out in outputs:
-            out.close()
+        session.stop()
         if overlay is not None:
             overlay.close()
-        calib.save()
     print("[eyetrack] stopped")
     return 0

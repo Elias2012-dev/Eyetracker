@@ -401,25 +401,25 @@ class _Out:
 
 @pytest.mark.parametrize("tracking", [True, False])
 def test_outputs_become_labelled_chips(tracking):
-    from eyetrack.app import _output_chips
+    from eyetrack.session import output_chips
 
     outputs = [_Out("game-link"), _Out("udp"), _Out("mouse", active=True)]
-    chips = _output_chips(outputs, tracking)
+    chips = output_chips(outputs, tracking)
     assert [c[0] for c in chips] == ["TrackIR", "Minecraft", "Mouse"]
     assert all(on is tracking for _, on in chips), (
         "a sink is only sending while a face is tracked")
 
 
 def test_a_disarmed_mouse_is_shown_as_off_even_while_tracking():
-    from eyetrack.app import _output_chips
+    from eyetrack.session import output_chips
 
-    chips = _output_chips([_Out("mouse", active=False)], True)
+    chips = output_chips([_Out("mouse", active=False)], True)
     assert chips == (("Mouse", False),)
 
 
 def test_chip_labels_are_short_enough_to_share_one_row():
     """Three sinks have to fit side by side, or the card grows a dead row."""
-    from eyetrack.app import CHIP_LABELS
+    from eyetrack.session import CHIP_LABELS
 
     chips = [CHIP_LABELS[n] for n in ("game-link", "udp", "mouse")]
     assert chip_rows(chips, _RAIL_W - 2 * _PAD) == 1, (
