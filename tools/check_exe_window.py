@@ -2,8 +2,12 @@
 
 Builds succeed and unit tests pass, but the packaged path can differ: a
 missing Tk hidden import or a stripped module shows up only here. Launches
-dist/Eyetracker.exe with no arguments, waits for the window, lists its
-top-level windows and screenshots it, then closes it.
+the exe with no arguments, waits for the window, lists its top-level
+windows and screenshots it, then closes it.
+
+Usage: check_exe_window.py [path-to-exe]
+Defaults to dist/Eyetracker.exe; point it at a downloaded release asset to
+verify what people actually get.
 """
 from __future__ import annotations
 
@@ -13,10 +17,13 @@ import sys
 import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-EXE = ROOT / "dist" / "Eyetracker.exe"
+EXE = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 \
+    else ROOT / "dist" / "Eyetracker.exe"
 SHOT = ROOT / "tools" / "preview" / "exe_gui.png"
 
 ENUM = r"""
+# $PIDS expands to a quoted PowerShell array, e.g. '1108','23728'.
+$want = @($PIDS)
 $sig = @"
 using System;
 using System.Text;
@@ -27,6 +34,8 @@ public class W {
   [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] public static extern int GetWindowRect(IntPtr h, out RECT r);
+  public struct RECT { public int L, T, R, B; }
 }
 "@
 Add-Type -TypeDefinition $sig
@@ -35,10 +44,14 @@ $cb = [W+EnumProc]{
   param($h, $p)
   $proc = 0
   [void][W]::GetWindowThreadProcessId($h, [ref]$proc)
-  if ($proc -eq $PID_WANTED -and [W]::IsWindowVisible($h)) {
+  if ($want -contains "$proc" -and [W]::IsWindowVisible($h)) {
     $sb = New-Object System.Text.StringBuilder 256
     [void][W]::GetWindowText($h, $sb, 256)
-    if ($sb.Length -gt 0) { $script:found += $sb.ToString() }
+    if ($sb.Length -gt 0) {
+      $r = New-Object W+RECT
+      [void][W]::GetWindowRect($h, [ref]$r)
+      $script:found += ("{0} at {1},{2} {3}x{4}" -f $sb.ToString(), $r.L, $r.T, ($r.R-$r.L), ($r.B-$r.T))
+    }
   }
   return $true
 }
@@ -71,21 +84,37 @@ def main() -> int:
                             text=True)
     try:
         # A onefile exe unpacks ~120 MB before Python starts; give it room.
-        deadline = time.time() + 150
+        started = time.time()
+        deadline = started + 240
         seen = []
         while time.time() < deadline:
-            time.sleep(8)
-            script = ENUM.replace("$PID_WANTED", str(proc.pid))
+            time.sleep(10)
+            # The onefile bootloader forks a child that owns the real window,
+            # so watch every Eyetracker.exe process, not just proc.pid.
+            pids = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq Eyetracker.exe",
+                 "/FO", "CSV", "/NH"],
+                capture_output=True, text=True, timeout=60).stdout
+            # Quote each pid: the template builds a PowerShell array from
+            # this, and bare numbers are read as one token.
+            want = ",".join(f"'{line.split(chr(34) + ',' + chr(34))[1].strip(chr(34))}'"
+                            for line in pids.splitlines() if '","' in line)
+            if not want:
+                if proc.poll() is not None:
+                    print(f"FAIL: the exe exited with {proc.returncode}")
+                    return 2
+                continue
+            script = ENUM.replace("$PIDS", want)
             res = subprocess.run(["powershell", "-NoProfile", "-Command", script],
                                  capture_output=True, text=True, timeout=90)
-            titles = [ln[8:] for ln in res.stdout.splitlines()
-                      if ln.startswith("WINDOW: ")]
-            count = next((ln[6:] for ln in res.stdout.splitlines()
-                          if ln.startswith("COUNT: ")), "0")
-            print(f"  t+{int(time.time() - (deadline - 150)):>3}s "
-                  f"visible windows: {count} {titles}")
-            if count != "0":
-                seen = titles
+            lines = [ln for ln in res.stdout.splitlines()
+                     if ln.startswith("WINDOW: ")]
+            print(f"  t+{int(time.time() - started):>3}s "
+                  f"windows: {len(lines)}")
+            for ln in lines:
+                print("   ", ln)
+            if lines:
+                seen = lines
                 break
         if not seen:
             print("FAIL: the exe never showed a window")
@@ -93,13 +122,15 @@ def main() -> int:
 
         cap = subprocess.run(
             ["powershell", "-NoProfile", "-Command", CAPTURE % str(SHOT)],
-            capture_output=True, text=True, timeout=90)
+            capture_output=True, text=True, timeout=120)
         print("screenshot:", cap.stdout.strip(),
               SHOT.stat().st_size if SHOT.exists() else "missing")
-        print("PASS: window titles =", seen)
+        print("PASS: window =", seen)
         return 0
     finally:
         proc.terminate()
+        subprocess.run(["taskkill", "/F", "/IM", "Eyetracker.exe"],
+                       capture_output=True, text=True)
         try:
             proc.communicate(timeout=20)
         except subprocess.TimeoutExpired:

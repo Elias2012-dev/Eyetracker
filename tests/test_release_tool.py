@@ -63,6 +63,29 @@ def test_rejects_anything_that_is_not_three_numbers(bad):
     assert "major.minor.patch" in str(exc.value)
 
 
+# ---------------------------------------------------------- app version
+def test_release_refuses_to_mislabel_the_binary():
+    """The tag and `__version__` are separate facts; nothing joined them.
+
+    v1.5.0 shipped a binary whose --version answered 1.4.1. The unit test
+    that would have caught it only runs on a tagged commit - which is after
+    the release exists - so the tag must be gated here, before it is cut.
+    """
+    from eyetrack import __version__ as app_version
+
+    R.check_app_version(app_version)          # must not raise
+
+
+def test_release_rejects_a_version_the_app_does_not_report():
+    from eyetrack import __version__ as app_version
+
+    with pytest.raises(R.ReleaseError) as exc:
+        R.check_app_version("99.0.0")
+    message = str(exc.value)
+    assert app_version in message
+    assert "eyetrack/__init__.py" in message
+
+
 # -------------------------------------------------------------- dirty tree
 def test_refuses_on_a_modified_tracked_file(monkeypatch):
     """The headline guarantee: no release from uncommitted work."""
@@ -262,6 +285,9 @@ def test_main_dry_run_never_tags_or_pushes(monkeypatch, fake_git):
     monkeypatch.setattr(R, "check_tag_free", lambda tag: None)
     monkeypatch.setattr(R, "check_ci_green", lambda sha: True)
     monkeypatch.setattr(R, "check_inputs", lambda rep: None)
+    # The app/tag version gate is covered separately; these tests are
+    # about what happens after it, so stub it out.
+    monkeypatch.setattr(R, "check_app_version", lambda version: None)
     monkeypatch.setattr(R, "check_tests", lambda: True)
     assert R.main(["1.4.0", "--dry-run"]) == 0
     assert not fake_git.called("tag", "-a"), "dry run created a tag"
@@ -275,6 +301,9 @@ def test_main_exits_before_tagging_when_tests_fail(monkeypatch):
     monkeypatch.setattr(R, "check_tag_free", lambda tag: None)
     monkeypatch.setattr(R, "check_ci_green", lambda sha: True)
     monkeypatch.setattr(R, "check_inputs", lambda rep: None)
+    # The app/tag version gate is covered separately; these tests are
+    # about what happens after it, so stub it out.
+    monkeypatch.setattr(R, "check_app_version", lambda version: None)
     monkeypatch.setattr(R, "check_tests", lambda: False)
     assert R.main(["1.4.0"]) == 1
 
@@ -285,6 +314,9 @@ def test_failed_local_build_blocks_the_tag(monkeypatch):
     monkeypatch.setattr(R, "check_tag_free", lambda tag: None)
     monkeypatch.setattr(R, "check_ci_green", lambda sha: True)
     monkeypatch.setattr(R, "check_inputs", lambda rep: None)
+    # The app/tag version gate is covered separately; these tests are
+    # about what happens after it, so stub it out.
+    monkeypatch.setattr(R, "check_app_version", lambda version: None)
     monkeypatch.setattr(R, "check_tests", lambda: True)
     monkeypatch.setattr(R, "build_and_verify", lambda: False)
     monkeypatch.setattr(R, "git", lambda *a: pytest.fail("tagged after a bad build"))
@@ -298,6 +330,9 @@ def test_failed_push_deletes_the_local_tag(monkeypatch):
     monkeypatch.setattr(R, "check_tag_free", lambda tag: None)
     monkeypatch.setattr(R, "check_ci_green", lambda sha: True)
     monkeypatch.setattr(R, "check_inputs", lambda rep: None)
+    # The app/tag version gate is covered separately; these tests are
+    # about what happens after it, so stub it out.
+    monkeypatch.setattr(R, "check_app_version", lambda version: None)
     monkeypatch.setattr(R, "check_tests", lambda: True)
 
     calls = []

@@ -144,6 +144,27 @@ def check_version(version: str) -> str:
     return m.group(1)
 
 
+def check_app_version(version: str) -> None:
+    """The app must report the version we are about to publish.
+
+    ``__version__`` and the tag are two different pieces of information, and
+    nothing connected them: v1.5.0 shipped a binary whose ``--version``
+    answered 1.4.1. Tests only notice on a tagged commit, which is *after*
+    the release exists, so the check has to happen before the tag is cut.
+    """
+    sys.path.insert(0, str(REPO))
+    try:
+        from eyetrack import __version__ as app_version
+    except ImportError as exc:
+        raise ReleaseError(f"could not import eyetrack: {exc}")
+    if app_version != version:
+        raise ReleaseError(
+            f"eyetrack.__version__ is {app_version!r} but you are cutting "
+            f"v{version}.\nThe published exe would report a version that "
+            "does not exist.\nUpdate eyetrack/__init__.py and commit "
+            "first.")
+
+
 def check_tag_free(tag: str) -> None:
     existing = git("tag", "--list", tag)
     if existing:
@@ -303,6 +324,7 @@ def main(argv: list[str] | None = None) -> int:
     tag = f"v{version}"
 
     rep = Report()
+    check_app_version(version)
     check_tag_free(tag)
     sha = check_pushed()
     check_inputs(rep)
