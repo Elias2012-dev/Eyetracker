@@ -143,6 +143,7 @@ class TrackingSession:
         self.fps_ema = 0.0
         self._t_last = 0.0
         self._auto_recentered = False
+        self._auto_centred = False
         self._bridge_ready = False
         # (yaw, pitch, t) of the pose we are waiting to become "settled".
         self._calib_ref: tuple[float, float, float] | None = None
@@ -174,6 +175,7 @@ class TrackingSession:
 
         self._t_last = time.monotonic()
         self._auto_recentered = False
+        self._auto_centred = False
         self.running = True
 
     def stop(self) -> None:
@@ -240,10 +242,14 @@ class TrackingSession:
 
         if pose.detected:
             self.last_raw = pose
-            if not self.calib.valid:
-                # First run: assume the user starts facing the screen.
+            if not self._auto_centred:
+                # First face of the session: assume the user starts facing
+                # the screen. This is once per session, not once per frame -
+                # keyed on the calibration being *invalid* it would rewrite
+                # calibration.json 60 times a second for the whole run.
                 self.calib.center_from(pose)
                 self.calib.save()
+                self._auto_centred = True
                 out.message = "auto-centred on first frame"
             elif self.recenter_on_start and not self._auto_recentered:
                 self.calib.center_from(pose)

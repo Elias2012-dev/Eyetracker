@@ -141,3 +141,99 @@ def test_beginning_calibration_clears_any_pending_hold():
     fresh.cfg = Config()
     fresh.wizard = fresh.begin_calibration()
     assert fresh._calib_ref is None, "a new wizard must not inherit an old hold"
+
+
+# ------------------------------------------------- the per-frame write
+class _StubCap:
+    """A camera that always delivers the same frame."""
+
+    def read(self):
+        import numpy as np
+        return True, np.zeros((8, 8, 3), np.uint8)
+
+
+class _StubEstimator:
+    def __init__(self):
+        self.n = 0
+
+    def process(self, frame, ms):
+        self.n += 1
+        # A face that jitters slightly, as any real one does.
+        return pose(yaw=0.001 * self.n, pitch=0.001 * self.n)
+
+
+def _runnable_session():
+    """A session with everything step() touches, and no real hardware."""
+    from eyetrack.config import Config
+    from eyetrack.filters import PoseFilter
+
+    s = TrackingSession.__new__(TrackingSession)
+    cfg = Config()
+    s.cfg = cfg
+    s.calib = Calibration()
+    s.filt = PoseFilter(cfg.filter)
+    s.cap = _StubCap()
+    s.estimator = _StubEstimator()
+    s.outputs = []
+    s.wizard = None
+    s.last_raw = None
+    s._calib_ref = None
+    s.running = True
+    s.recenter_on_start = False
+    s._auto_centred = False
+    s._auto_recentered = True      # isolate the auto-centre branch
+    s.values = {}
+    s.fps_ema = 0.0
+    s._t_last = 0.0
+    return s
+
+
+def test_autocentring_writes_once_not_every_frame():
+    """Regression: centring used to be keyed on `calib.valid`.
+
+    Since only the wizard may set that, "not valid" stays true for the
+    whole session, so keying on it rewrote calibration.json once per frame
+    and dragged the neutral pose along with every camera tremor.
+
+    This drives the real ``step()``; re-implementing the branch here would
+    pass even with the bug in place.
+    """
+    s = _runnable_session()
+    saves = []
+    s.calib.save = lambda *a, **k: saves.append(1)
+
+    for _ in range(30):
+        s.step()
+
+    assert len(saves) == 1, f"calibration.json written {len(saves)} times in 30 frames"
+    assert s.calib.valid is False, "auto-centring still must not claim calibration"
+
+
+def test_autocentring_uses_the_first_pose_not_the_latest():
+    s = _runnable_session()
+    s.calib.save = lambda *a, **k: None
+    for _ in range(10):
+        s.step()
+    # The neutral pose must not chase the camera's jitter.
+    assert s.calib.proxy_yaw_center == pytest.approx(0.001, abs=1e-6)
+
+
+def test_a_restarted_session_autocentres_again():
+    """start() resets the flag, or Stop then Start skips the auto-centre."""
+
+    s = _runnable_session()
+    s.calib.save = lambda *a, **k: None
+    for _ in range(3):
+        s.step()
+    assert s._auto_centred is True
+
+    s.running = False
+    s.cap = _StubCap()
+    s.estimator = _StubEstimator()
+    # Emulate what start() does, without opening a real camera.
+    s._auto_recentered = False
+    s._auto_centred = False
+    s._t_last = 0.0
+    s.running = True
+    s.step()
+    assert s._auto_centred is True, "a new session must auto-centre again"
