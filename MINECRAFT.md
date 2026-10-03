@@ -45,6 +45,8 @@ sending — start it and calibrate first.
 
 ## Setup
 
+![mod icon](minecraft-mod/src/main/resources/assets/eyetrack/icon.png)
+
 1. Install **Fabric Loader** and **Fabric API** for Minecraft 26.2.
 2. Put `eyetrack-1.0.0.jar` in your `mods` folder:
 
@@ -97,3 +99,11 @@ windows are behind the webcam, not beside it.
 `staleTimeoutMs`.
 
 Full guide: [INSTALL.md](INSTALL.md)
+
+## Publishing the mod
+
+`minecraft-mod/src/main/resources/assets/eyetrack/icon.png` is the icon for
+Modrinth and CurseForge - a 128x128 PNG, which is what both platforms
+require. `fabric.mod.json` points at the same file so the mod list shows it
+too. Regenerate it with `python tools/make_mod_icon.py`; `tests/test_icon.py`
+checks the size, centring, symmetry and palette.

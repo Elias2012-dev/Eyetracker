@@ -9,6 +9,7 @@
 	],
 	"license": "MIT",
 	"environment": "client",
+	"icon": "assets/eyetrack/icon.png",
 	"entrypoints": {
 		"client": [
 			"dev.eyetrack.client.EyeTrackClient"
