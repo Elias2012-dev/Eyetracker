@@ -32,20 +32,28 @@ There is no installer. You download one file and run it.
 2. **Put it anywhere you like** — Desktop, a games folder, wherever.
    It is self-contained and writes nothing next to itself.
 
-3. **Double-click it.** A small **setup window** appears and tells you what
-   it is doing — *“Looking for your camera… testing Camo…”*. It tries each
-   camera Windows reports and prefers one that actually shows a face over
-   one that merely opens, then says **Camera found**. This is the part that
-   used to look like a hang, so it is worth waiting for.
+3. **Double-click it.** A **settings window** opens. It lists every camera
+   Windows reports and shows a live picture of the one currently selected,
+   so you can tell a webcam from a virtual camera before you commit.
 
    > **First launch takes a few seconds** — it unpacks itself into a temp
-   > folder before the setup window appears. A console window may flash
-   > past; that's normal.
+   > folder before the window appears. A console window may flash past;
+   > that's normal.
 
-4. **Calibrate.** The wizard starts by itself. Follow the big prompt at the
-   bottom of the preview window — look centre, left, right, up, down —
-   pressing `SPACE` to capture each pose. About 30 seconds, and it makes
-   everything feel right afterwards.
+4. **Pick your camera.** If the picture is not what you want, click another
+   entry in the list — the preview switches immediately. The caption under
+   the picture tells you the real capture size being sent to the game
+   (`1280x720 -> sent to the game`). If a camera shows
+   *“no frames from this camera”*, that device is unusable on this
+   machine; choose another.
+
+5. **Press `Start tracking`.** The tracker window opens and follows your
+   head. Tick the games you play under **Game outputs** — leave the defaults
+   if you are not sure.
+
+6. **Press `Calibrate`.** Follow the big prompt — look centre, left, right,
+   up, down — pressing `SPACE` to capture each pose. About 30 seconds, and
+   it makes everything feel right afterwards.
 
    ![the calibration wizard](docs/calibration.jpg)
 
@@ -61,22 +69,33 @@ There is no installer. You download one file and run it.
 
    ![the HUD after calibration](docs/tracking.jpg)
 
-5. **You are done.** The window keeps running. Start your game — it loads
-   the tracker's DLL and does not need to know anything about it — and turn
-   head tracking on in the game's own options ([per-game setup](#4-per-game-setup)).
+7. **You are done.** Leave the windows open, start your game — it loads the
+   tracker's DLL and does not need to know anything about it — and turn
+   head tracking on in the game's own options
+   ([per-game setup](#4-per-game-setup)).
+
+> The camera is only ever open in one place. The preview lets go of it when
+> you press **Start tracking** and picks it back up when you press **Stop**,
+> so the two never fight over the device.
 
 ### Redo any of it
 
-| Situation | Command |
+Most of it you can just do in the window — every setting saves as you change
+it.
+
+| Situation | Where |
 |---|---|
-| wrong camera, or a webcam arrived later | `Eyetracker.exe --pick-camera` |
-| start over (camera *and* calibration) | `Eyetracker.exe --first-run` |
-| recalibrate only | press `C` in the window |
-| never run the guided setup (unattended launches) | `Eyetracker.exe --no-first-run` |
+| wrong camera, or a webcam arrived later | click it in the window's camera list |
+| recalibrate | **Calibrate** in the window, or press `C` in the tracker |
+| recentre after moving your chair | **Re-centre**, or press `R` |
+| pick a camera from a terminal instead | `Eyetracker.exe --pick-camera` |
+| redo the old guided first-run flow | `Eyetracker.exe --first-run` |
+| skip the settings window entirely | `Eyetracker.exe --no-gui` |
 
 `--pick-camera` lists every camera Windows reports. Type a number, or part
 of a name. The choice is saved **by device name**, so it survives reboots
-that renumber the devices.
+that renumber the devices. Choosing a camera in the window does the same
+thing.
 
 ### The keys
 

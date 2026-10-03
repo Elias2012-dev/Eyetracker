@@ -26,18 +26,37 @@ the pipeline and protocol already carry everything needed.
 
 ---
 
-## Install in three steps
+## Install in four steps
 
 1. **Download [`Eyetracker.exe`](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/Eyetracker.exe)** (~113 MB) from the
    [releases page](https://github.com/Elias2012-dev/Eyetracker/releases).
    One self-contained file: no Python, no pip, no installer, no admin rights.
-2. **Double-click it.** It finds your camera by itself, then walks you through
-   a 30-second calibration. There is nothing to configure.
-3. **Start your game**, with the tracker already running.
+2. **Double-click it.** A **settings window** opens with a live picture of the
+   camera it picked. Click a different camera in the list if that is not the
+   one you want — the picture updates as you click.
+3. **Press `Start tracking`**, then **`Calibrate`** and follow the five poses
+   (centre, left, right, up, down). About 30 seconds.
+4. **Start your game** and turn head tracking on in its own options.
 
 That is the whole installation. Everything else — the TrackIR DLL, the
 Minecraft mod, the mouse output — is optional, and the bits you *do* want are
 also a download away.
+
+<details>
+<summary>What is in the window (click to expand)</summary>
+
+| Panel | What it does |
+|---|---|
+| **Start tracking / Stop tracking** | the one button that matters; everything else configures it |
+| **Camera** | every camera Windows reports, with a live preview of the selected one — no guessing which is which |
+| **Game outputs** | tick the games you play: TrackIR games, Minecraft, mouse look |
+| **Display** | compact HUD, face mesh, keep the HUD above other windows |
+| **Feel** | how far left/right and up/down you can turn, and how much smoothing |
+
+Everything is saved as you change it, so the window is only ever one click
+away from where you left off. There is nothing to confirm or submit.
+
+</details>
 
 <details>
 <summary>Per-game notes (click to expand)</summary>
@@ -64,9 +83,10 @@ source, every game, and a verification checklist.
 
 ## What you'll see
 
-The preview window *is* the interface — the packaged exe has no terminal. It
-answers four questions at a glance: is it tracking, which way is each axis
-going, is the game actually receiving it, and is it calibrated.
+Two windows, and they never overlap in purpose. The **settings window** is
+where you choose a camera and set things up; the **tracker window** is what
+appears once you press Start, and it is the interface while you play — the
+packaged exe has no terminal.
 
 ![the HUD while tracking](docs/tracking.jpg)
 
