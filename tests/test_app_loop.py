@@ -204,7 +204,7 @@ def _run(rig, **kw):
     return app.run(rig["cfg"], config_path=rig["path"], **kw)
 
 
-def _run_with_keys(monkeypatch, keys, **kw):
+def _run_with_keys(monkeypatch, keys, *, config_path, **kw):
     """Run the loop with a specific key script and hand back the overlay."""
     ov = FakeOverlay(keys=keys)
     monkeypatch.setattr(app, "open_camera", lambda cfg: FakeCapture())
@@ -213,7 +213,7 @@ def _run_with_keys(monkeypatch, keys, **kw):
     monkeypatch.setattr(app, "build_outputs", lambda cfg: [])
     monkeypatch.setattr(app, "Calibration", _StubCalibration)
     monkeypatch.setattr(app, "CalibrationWizard", _StubWizard)
-    code = app.run(Config(), config_path="unused.json", **kw)
+    code = app.run(Config(), config_path=config_path, **kw)
     return code, ov
 
 
@@ -224,18 +224,21 @@ def test_the_loop_runs_and_exits_on_q(rig):
         "the loop did not keep drawing until Q")
 
 
-def test_h_opens_the_help_panel(monkeypatch):
-    _code, ov = _run_with_keys(monkeypatch, [ord("h"), ord("q")])
+def test_h_opens_the_help_panel(monkeypatch, tmp_path):
+    _code, ov = _run_with_keys(monkeypatch, [ord("h"), ord("q")],
+                              config_path=tmp_path / "eyetrack.json")
     assert ov.help_visible is True, "H did not open the help panel"
 
 
-def test_h_closes_the_help_panel_again(monkeypatch):
-    _code, ov = _run_with_keys(monkeypatch, [ord("h"), ord("h"), ord("q")])
+def test_h_closes_the_help_panel_again(monkeypatch, tmp_path):
+    _code, ov = _run_with_keys(monkeypatch, [ord("h"), ord("h"), ord("q")],
+                              config_path=tmp_path / "eyetrack.json")
     assert ov.help_visible is False, "H is not a toggle"
 
 
-def test_m_toggles_the_face_mesh(monkeypatch):
-    _code, ov = _run_with_keys(monkeypatch, [ord("m"), ord("q")])
+def test_m_toggles_the_face_mesh(monkeypatch, tmp_path):
+    _code, ov = _run_with_keys(monkeypatch, [ord("m"), ord("q")],
+                              config_path=tmp_path / "eyetrack.json")
     assert ov.show_mesh is False, "M did not toggle the mesh"
 
 
@@ -257,15 +260,19 @@ def test_f_switches_the_layout_and_remembers_it(monkeypatch, tmp_path):
     assert Config.load(path).overlay.compact is True, "the choice was not saved"
 
 
-def test_escape_skips_setup_but_keeps_tracking_on_a_fresh_install(monkeypatch):
+def test_escape_skips_setup_but_keeps_tracking_on_a_fresh_install(
+        monkeypatch, tmp_path):
     """ESC on first run must not quit - the user has not calibrated yet."""
-    code, ov = _run_with_keys(monkeypatch, [27, ord("q")], first_run=True)
+    code, ov = _run_with_keys(monkeypatch, [27, ord("q")],
+                              config_path=tmp_path / "eyetrack.json",
+                              first_run=True)
     assert code == 0
     assert len(ov.frames) == 2, "the app quit instead of skipping into tracking"
 
 
-def test_escape_still_quits_outside_the_first_run(monkeypatch):
-    code, ov = _run_with_keys(monkeypatch, [27])
+def test_escape_still_quits_outside_the_first_run(monkeypatch, tmp_path):
+    code, ov = _run_with_keys(monkeypatch, [27],
+                              config_path=tmp_path / "eyetrack.json")
     assert code == 0
     assert len(ov.frames) == 1, "ESC should have quit immediately"
 
@@ -278,7 +285,8 @@ def test_outputs_reach_the_overlay_as_chips(rig):
     assert all(on for _, on in chips), "a tracked frame must light the chips"
 
 
-def test_chips_go_dark_when_the_face_is_lost(monkeypatch):
+def test_chips_go_dark_when_the_face_is_lost(monkeypatch, tmp_path):
+    config_path = tmp_path / "eyetrack.json"
     ov = FakeOverlay(keys=[ord("q")])
     monkeypatch.setattr(app, "open_camera", lambda cfg: FakeCapture())
     monkeypatch.setattr(app, "HeadPoseEstimator",
@@ -289,11 +297,12 @@ def test_chips_go_dark_when_the_face_is_lost(monkeypatch):
     monkeypatch.setattr(app, "Calibration", _StubCalibration)
     monkeypatch.setattr(app, "CalibrationWizard", _StubWizard)
 
-    app.run(Config(), config_path="unused.json")
+    app.run(Config(), config_path=str(config_path))
     assert ov.chips == (("Minecraft", False),)
 
 
-def test_the_mouse_sink_reports_its_toggle_state(monkeypatch):
+def test_the_mouse_sink_reports_its_toggle_state(monkeypatch, tmp_path):
+    config_path = tmp_path / "eyetrack.json"
     """F9 disarms the mouse; the chip has to say so rather than lie."""
     ov = FakeOverlay(keys=[ord("q")])
     monkeypatch.setattr(app, "open_camera", lambda cfg: FakeCapture())
@@ -304,7 +313,7 @@ def test_the_mouse_sink_reports_its_toggle_state(monkeypatch):
     monkeypatch.setattr(app, "Calibration", _StubCalibration)
     monkeypatch.setattr(app, "CalibrationWizard", _StubWizard)
 
-    app.run(Config(), config_path="unused.json")
+    app.run(Config(), config_path=str(config_path))
     assert ov.chips == (("Mouse", False),)
 
 
@@ -323,7 +332,8 @@ def test_outputs_are_closed_on_the_way_out(rig):
         assert out.sent, "sanity"
 
 
-def test_the_camera_is_released_even_if_drawing_raises(monkeypatch):
+def test_the_camera_is_released_even_if_drawing_raises(monkeypatch, tmp_path):
+    config_path = tmp_path / "eyetrack.json"
     """A crash in the renderer must not leave the webcam locked."""
     cap = FakeCapture()
 
@@ -339,7 +349,7 @@ def test_the_camera_is_released_even_if_drawing_raises(monkeypatch):
     monkeypatch.setattr(app, "CalibrationWizard", _StubWizard)
 
     with pytest.raises(RuntimeError):
-        app.run(Config(), config_path="unused.json")
+        app.run(Config(), config_path=str(config_path))
     assert cap.released, "the camera was left open"
     assert _StubCalibration.instances[-1].saved >= 0
 
@@ -351,3 +361,34 @@ def test_the_status_line_clears_itself_after_one_frame(rig):
     assert status, "the first frame says nothing about what to press"
     assert FakeOverlay.instances[0].frames[1][1] == "", (
         "the status line was never cleared")
+
+def test_the_test_suite_does_not_write_into_the_repository():
+    """A test that litters the checkout breaks the release preflight.
+
+    app.run() persists the config it is handed, so a relative config_path
+    drops a file in the working tree - which then makes `release.py`
+    refuse to tag anything. Every call has to point somewhere temporary.
+    """
+    import ast
+    import pathlib
+
+    tree = ast.parse(pathlib.Path(__file__).read_text(encoding="utf-8"))
+    offenders = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not (isinstance(node.func, ast.Attribute)
+                and node.func.attr == "run"):
+            continue
+        for kw in node.keywords:
+            if kw.arg != "config_path":
+                continue
+            # A literal path is the dangerous case; a tmp_path variable is
+            # exactly what we want and cannot be resolved here.
+            if isinstance(kw.value, ast.Constant) and isinstance(
+                    kw.value.value, str):
+                if "/" not in kw.value.value and "\\" not in kw.value.value:
+                    offenders.append(kw.value.value)
+    assert not offenders, (
+        f"app.run(config_path={offenders!r}) is relative, so these tests "
+        "write into the repository instead of a tmp_path")
