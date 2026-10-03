@@ -104,3 +104,25 @@ def test_install_guide_mentions_every_output():
     for topic in ("Minecraft", "ETS2", "Farming Simulator", "mouse",
                   "--pick-camera", "phone"):
         assert topic.lower() in text.lower(), f"INSTALL.md never mentions {topic}"
+
+def test_the_hud_screenshots_the_docs_embed_are_the_ones_we_generate():
+    """A renamed render must not leave the README pointing at nothing.
+
+    The link check above catches a missing file; this catches the subtler
+    case where overlay_preview writes a new name and the docs quietly keep
+    showing the old one.
+    """
+    from tools.overlay_preview import DOC_IMAGES
+
+    both = README.read_text(encoding="utf-8") + INSTALL.read_text(encoding="utf-8")
+    for name in DOC_IMAGES.values():
+        assert f"docs/{name}" in both, f"neither doc embeds docs/{name}"
+        assert (REPO / "docs" / name).exists(), f"docs/{name} is missing"
+
+
+def test_the_docs_show_the_hud():
+    """A reader who has not installed anything still needs to see it works."""
+    text = README.read_text(encoding="utf-8")
+    assert text.count("![") >= 3, "the README has no screenshots to look at"
+    for topic in ("TRACKING", "calibration", "compact"):
+        assert topic.lower() in text.lower(), f"the README never mentions {topic}"

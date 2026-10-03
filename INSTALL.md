@@ -18,6 +18,7 @@ There is no installer. You download one file and run it.
 | Run from source / develop | [From source](#7-running-from-source) |
 | Check it works | [Verify](#8-verify-the-install) |
 | Something's wrong | [Troubleshooting](#9-troubleshooting) |
+| Redo the setup | [Redo any of it](#redo-any-of-it) |
 
 ---
 
@@ -31,42 +32,66 @@ There is no installer. You download one file and run it.
 2. **Put it anywhere you like** — Desktop, a games folder, wherever.
    It is self-contained and writes nothing next to itself.
 
-3. **Double-click it.** The preview window that opens *is* the whole
-   interface. It shows your face with a green outline and three meters for
-   yaw / pitch / roll.
+3. **Double-click it.** A small **setup window** appears and tells you what
+   it is doing — *“Looking for your camera… testing Camo…”*. It tries each
+   camera Windows reports and prefers one that actually shows a face over
+   one that merely opens, then says **Camera found**. This is the part that
+   used to look like a hang, so it is worth waiting for.
 
    > **First launch takes a few seconds** — it unpacks itself into a temp
-   > folder. A console window may flash past; that's normal.
+   > folder before the setup window appears. A console window may flash
+   > past; that's normal.
 
-4. **Pick your camera** if you have more than one (first runs do this
-   for you, but you can do it by hand at any time):
+4. **Calibrate.** The wizard starts by itself. Follow the big prompt at the
+   bottom of the preview window — look centre, left, right, up, down —
+   pressing `SPACE` to capture each pose. About 30 seconds, and it makes
+   everything feel right afterwards.
 
-   ```
-   Eyetracker.exe --pick-camera
-   ```
+   ![the calibration wizard](docs/calibration.jpg)
 
-   It lists every camera Windows reports. Type a number, or part of a
-   name. The choice is saved, so you only do this once.
-
-5. **The first run sets itself up.** The exe works out which camera to use
-   — it tries each one Windows reports and prefers one that actually shows
-   a face rather than one that merely opens — then starts the calibration
-   wizard by itself. Follow the prompts: look centre, left, right, up,
-   down, pressing `SPACE` to capture each pose. About 30 seconds, and it
-   makes everything feel right afterwards.
+   | What you see | What to do |
+   |---|---|
+   | `CALIBRATION` · `STEP 2 OF 5` | the progress pips along the bottom fill in as you go |
+   | the big prompt | do exactly what it says |
+   | the viewfinder on the right | where to point your head |
+   | the green `TRACKING` pill, top left | you are in frame — if it says `NO FACE`, the light is wrong |
 
    Press `ESC` to skip it and just start tracking; press `C` later to
-   calibrate properly. To redo the whole thing (wrong camera, or you want
-   to start over):
+   calibrate properly.
 
-   ```
-   Eyetracker.exe --first-run
-   ```
+   ![the HUD after calibration](docs/tracking.jpg)
 
-6. **Start your game** with the tracker already running. The game loads
-   the tracker's DLL; it does not need to know anything about it.
+5. **You are done.** The window keeps running. Start your game — it loads
+   the tracker's DLL and does not need to know anything about it — and turn
+   head tracking on in the game's own options ([per-game setup](#4-per-game-setup)).
 
-7. **Enable head tracking in the game** — see [per-game setup](#4-per-game-setup).
+### Redo any of it
+
+| Situation | Command |
+|---|---|
+| wrong camera, or a webcam arrived later | `Eyetracker.exe --pick-camera` |
+| start over (camera *and* calibration) | `Eyetracker.exe --first-run` |
+| recalibrate only | press `C` in the window |
+| never run the guided setup (unattended launches) | `Eyetracker.exe --no-first-run` |
+
+`--pick-camera` lists every camera Windows reports. Type a number, or part
+of a name. The choice is saved **by device name**, so it survives reboots
+that renumber the devices.
+
+### The keys
+
+Everything is a key in the tracker window — press `H` in there any time to
+see this list.
+
+| Key | Action |
+|---|---|
+| `C` | start the calibration wizard (`SPACE` captures, `ESC` skips) |
+| `R` | recentre on how you sit right now |
+| `H` | show / hide the key list |
+| `M` | show / hide the face mesh |
+| `F` | switch between the camera view and the compact HUD (remembered) |
+| `Q` / `ESC` | quit |
+| `F9` | arm/disarm the mouse output (global) |
 
 ### Windows SmartScreen
 
@@ -274,20 +299,29 @@ locations on your machine.
 
 ## 8. Verify the install
 
-A 30-second sanity check:
+A 30-second sanity check, read straight off the window:
 
-1. **Does the tracker see you?** Run it. You should get a green face
-   outline and a `TRACKING` pill. No face? → [troubleshooting](#9-troubleshooting).
+1. **Does the tracker see you?** The rail header should read `TRACKING` in
+   green, with a green face outline on the video. `NO FACE` in amber means
+   the face is not found → [troubleshooting](#9-troubleshooting).
 
-2. **Are the numbers moving?** Turn your head and watch the yaw/pitch
-   meters. Direction should match: the legend says `+ = your left`.
+   ![not tracking](docs/not-tracking.jpg)
 
-3. **Did it register the game bridge?** The console/log should show
-   `[game-link] ... bridge registered` on first run.
+2. **Are the numbers moving?** Turn your head and watch the yaw / pitch /
+   roll meters. Direction should match the legend: `+ = your left`.
 
-4. **Does the game see it?** Start the tracker first, then the game, and
-   enable head tracking. For Farming Simulator, check the `Head Tracking
-   System` line in `log.txt`.
+3. **Is the game receiving it?** The chips at the bottom of the rail light
+   up per output — `TRACKIR`, `MINECRAFT`, `MOUSE`. A lit chip means that
+   sink is actually sending; dark means it is configured but not tracking.
+
+4. **Is it in the game?** Start the tracker first, then the game, and turn
+   head tracking on. For Farming Simulator, check the `Head Tracking System`
+   line in `log.txt`. The log should also show `[game-link] ... bridge
+   registered` on first run.
+
+5. **Does it read well in your peripheral vision?** Press `F`. If the game
+   has the focus and the full window is in the way, the compact panel
+   (`docs/compact.png`) is what you want — and it is remembered next time.
 
 ---
 
@@ -295,9 +329,20 @@ A 30-second sanity check:
 
 **Windows blocked the exe** — *More info → Run anyway*; it's unsigned.
 
-**No face detected** — light *toward* your face, not from behind you. Sit
-roughly 50–70 cm away. Check the camera is the right one
+**No face detected** — the rail pill says `NO FACE` in amber and a card
+appears in the middle of the frame. Light *toward* your face, not from
+behind you. Sit roughly 50–70 cm away. Check the camera is the right one
 (`--list-cameras`). A virtual camera that isn't streaming shows black.
+
+**The setup window says “Camera found” but there's no face** — that is a
+lighting or framing problem, not a camera problem: it picked the best device
+it could find. Fix the light, or run `--pick-camera` and choose another.
+
+**The setup window hangs on “Looking for your camera…”** — it gives each
+device about six seconds before giving up on it, and a virtual camera that
+never delivers frames always uses the full six. With four cameras that is
+~25 seconds, once. If it is genuinely stuck, plug in a real webcam (or start
+your phone's companion app) and run `--no-first-run --camera 0`.
 
 **Axes feel inverted** — every layer has its own flag, because games differ:
 

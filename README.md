@@ -26,47 +26,98 @@ the pipeline and protocol already carry everything needed.
 
 ---
 
-## Installation
+## Install in three steps
 
-New here? Follow **[INSTALL.md](INSTALL.md)** — step-by-step setup for the
-exe, the Minecraft mod, a phone as the camera, running from source, and a
-verification checklist.
+1. **Download [`Eyetracker.exe`](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/Eyetracker.exe)** (~113 MB) from the
+   [releases page](https://github.com/Elias2012-dev/Eyetracker/releases).
+   One self-contained file: no Python, no pip, no installer, no admin rights.
+2. **Double-click it.** It finds your camera by itself, then walks you through
+   a 30-second calibration. There is nothing to configure.
+3. **Start your game**, with the tracker already running.
+
+That is the whole installation. Everything else — the TrackIR DLL, the
+Minecraft mod, the mouse output — is optional, and the bits you *do* want are
+also a download away.
+
+<details>
+<summary>Per-game notes (click to expand)</summary>
+
+| Game | One extra step |
+|---|---|
+| ETS2 / ATS | *Options → Gameplay → TrackIR* on |
+| Farming Simulator 25 / 22 | *Options → General → head tracking* on |
+| MSFS, DCS, X-Plane 12, War Thunder, ACC, DayZ, IL-2 | enable head tracking in the game; it loads our DLL from the standard registry key |
+| Minecraft 26.2 | drop [`freebuff-eyetrack-1.0.0.jar`](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/freebuff-eyetrack-1.0.0.jar) into `mods` (needs Fabric Loader + Fabric API), then `H` toggles tracking, `J` recentres |
+| Anything with mouse-look | `Eyetracker.exe --mouse`, then press `F9` to arm |
+
+</details>
+
+**Windows SmartScreen** may say *"Windows protected your PC"* — the build is
+not code-signed, so choose **More info → Run anyway**. Every build is
+reproducible from the source in this repository if you would rather check it
+yourself ([build_exe.bat](#run-it-as-a-standalone-exe)).
+
+**Full guide: [INSTALL.md](INSTALL.md)** — phone-as-camera, running from
+source, every game, and a verification checklist.
+
+---
+
+## What you'll see
+
+The preview window *is* the interface — the packaged exe has no terminal. It
+answers four questions at a glance: is it tracking, which way is each axis
+going, is the game actually receiving it, and is it calibrated.
+
+![the HUD while tracking](docs/tracking.jpg)
+
+| Where | What it tells you |
+|---|---|
+| **Rail, left** | status pill, then yaw / pitch / roll meters with the number and an explicit sign legend (`+ = your left`), then X/Y/Z translation in cm, then a chip per output sink |
+| **View gauge, top right** | roll as a tilting horizon, and a dot for where you are looking in 2D |
+| **Gaze trail** | your last ~2 seconds of head motion, fading out behind you — makes jitter visible instead of hiding it in the meters |
+| **Strip, bottom** | the keys, and any one-off message |
+| **Calibration card** | takes over the strip while the wizard runs, with progress pips and a viewfinder showing where to point |
+
+When the face is lost, the state is unmistakable rather than a hint:
+
+![no face detected](docs/not-tracking.jpg)
+
+Calibration replaces the bottom of the frame with one large card:
+
+![the calibration wizard](docs/calibration.jpg)
+
+And `F` switches to a small numbers-only panel for when a game owns the focus:
+
+![the compact HUD](docs/compact.png)
+
+---
 
 ---
 
 ## Download — get `Eyetracker.exe`
 
-**How to download: go to the releases page and install `Eyetracker.exe`.**
-
-👉 **[github.com/Elias2012-dev/Eyetracker/releases](https://github.com/Elias2012-dev/Eyetracker/releases)**
+Everything is on the
+[releases page](https://github.com/Elias2012-dev/Eyetracker/releases).
 
 | File | What it is |
 |---|---|
 | [**Eyetracker.exe**](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/Eyetracker.exe) | the whole tracker, self-contained (~113 MB) — no Python, no terminal, no pip |
 | [**freebuff-eyetrack-1.0.0.jar**](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/freebuff-eyetrack-1.0.0.jar) | the Minecraft 26.2 mod (only needed for Minecraft) |
 
-**Installing is the download.** No installer, no setup wizard, no
-dependencies:
+The exe's flags still work from a shortcut's *Target* box or a script. With no
+console the same text appears in a dialog (set `EYE_TRACKER_NO_DIALOG=1` to
+suppress that for unattended runs):
 
-1. Download `Eyetracker.exe` from the releases page.
-2. Double-click it. The preview window that opens *is* the interface.
-3. Start it **before** the game.
-   * **ETS2 / ATS** — *Options → Gameplay → TrackIR* on.
-   * **MSFS / DCS / X-Plane 12 / War Thunder / ACC / DayZ / IL-2** — enable
-     head tracking in the game; it loads our DLL straight from the standard
-     TrackIR registry key.
-   * **Minecraft** — drop `freebuff-eyetrack-1.0.0.jar` into your `mods`
-     folder next to Fabric Loader + Fabric API, then press `H` to toggle
-     tracking and `J` to recentre.
-   * **Any mouse-look game** — run with `--mouse` and press `F9` to arm.
-
-Windows may say "Windows protected your PC" because the build is not
-code-signed: choose **More info → Run anyway**. Every build is reproducible
-from the source in this repository, so you can verify or rebuild it
-yourself ([build_exe.bat](#run-it-as-a-standalone-exe)).
-
-Prefer a phone or no download? See
-[Using your phone as the camera](#using-your-phone-as-the-camera-windows-virtual-camera).
+```
+Eyetracker.exe --pick-camera     # choose from a list of every detected camera
+Eyetracker.exe --first-run       # redo the guided setup: find a camera + calibrate
+Eyetracker.exe --list-cameras    # dialog listing your cameras
+Eyetracker.exe --list-games      # the game preset matrix
+Eyetracker.exe --paths           # where config, model, DLLs and log live
+Eyetracker.exe --mouse           # head-to-cursor output
+Eyetracker.exe --game ets2       # apply a preset + print its setup notes
+Eyetracker.exe --compact         # small numbers-only HUD (or --top-most)
+```
 
 ---
 
@@ -115,18 +166,8 @@ the whole UI. Everything the app writes goes to `%APPDATA%\Eyetracker`:
 | `calibration.json` | calibration result |
 | `bridge\NPClient*.dll` | staged for the games — a one-file build unpacks into a temp folder that is deleted on exit, so the DLLs are copied somewhere permanent first |
 
-Options still work when you launch it from a terminal or script; with no
-console the same text appears in a dialog (set `EYE_TRACKER_NO_DIALOG=1`
-to suppress that for unattended runs):
-
-```
-Eyetracker.exe --pick-camera     # choose from a list of every detected camera
-Eyetracker.exe --list-cameras    # dialog listing your cameras
-Eyetracker.exe --list-games      # the game preset matrix
-Eyetracker.exe --paths           # where config, model, DLLs and log live
-Eyetracker.exe --mouse           # head-to-cursor output
-Eyetracker.exe --game ets2       # apply a preset + print its setup notes
-```
+Options still work when you launch it from a terminal or script — see
+[the flag list above](#download-get-eyetrackerexe).
 
 Good to know:
 
@@ -325,16 +366,22 @@ run.bat --game mouse     # same, plus the per-game setup notes
 
 | Key | Action |
 |---|---|
-| `C` | start the calibration wizard (SPACE captures, ESC cancels) |
+| `C` | start the calibration wizard (SPACE captures, ESC skips) |
 | `R` | recentre on your current neutral pose |
-| `Q` / `ESC` | quit |
+| `H` | show / hide the key list |
+| `M` | show / hide the face mesh |
+| `F` | switch between the camera view and the compact HUD |
+| `Q` / `ESC` | quit (on a fresh install ESC skips the setup first) |
 | `F9` | arm/disarm the mouse output (global; only when `mouse.enabled`) |
+
+`F` remembers the layout it switched to, so the next launch opens there.
 
 ### The HUD
 
-The preview window *is* the interface, so it answers three things at a
+The preview window *is* the interface, so it answers four things at a
 glance: a status pill for whether a face is found, three centre-anchored
-meters with an explicit sign legend (`yaw +12.3°  + = your left`), and the
+meters with an explicit sign legend (`yaw +12.3°  + = your left`), a chip per
+output sink showing whether the game is actually receiving it, and the
 calibration wizard when it is running. The sign legends are the point —
 which way is "positive" is the number one source of "the camera moves the
 wrong way" confusion.
@@ -348,7 +395,7 @@ Two layouts:
 | `--top-most` | keep the HUD above the game window |
 
 `--compact` and `--top-most` are the pair to reach for when a game has the
-focus: a 460×250 panel is easy to keep in peripheral vision. Both persist
+focus: a 468×268 panel is easy to keep in peripheral vision. Both persist
 to the config, so `Eyetracker.exe --compact` needs saying only once. Both
 have `--no-` inverses, which is what lets a one-off flag *not* overwrite a
 saved preference.
@@ -432,13 +479,14 @@ Repository layout:
 | `packaging/` | PyInstaller spec + launcher for the standalone exe |
 | `bridge/` | our own NPClient DLL: C sources, prebuilt DLLs, `NOTICE.txt` (ABI provenance) |
 | `minecraft-mod/` | Fabric mod for Minecraft 26.2 |
-| `tools/` | `fake_tracker.py` (synthetic motion), `inspect_pose.py` (pose debugging) |
-| `tests/` | pytest suite: protocol, shared memory, DLL ABI roundtrip, mouse, presets |
+| `tools/` | `fake_tracker.py` (synthetic motion), `inspect_pose.py` (pose debugging), `overlay_preview.py` (renders the HUD without a camera, incl. the README screenshots) |
+| `tests/` | pytest suite: protocol, shared memory, DLL ABI roundtrip, mouse, presets, HUD rendering, camera autodetect, the main loop |
 
 ```
-# tracker tests (115 tests: filters, calibration, UDP formats, shared memory,
-# mouse mapping, camera selection, HUD rendering, game presets, packaging
-# paths, zero-external-tracker guarantees, and a full writer -> bridge DLL
+# tracker tests (225 tests: filters, calibration, UDP formats, shared memory,
+# mouse mapping, camera selection + autodetect, HUD rendering, the main
+# loop's key handling, game presets, packaging paths, docs links,
+# zero-external-tracker guarantees, and a full writer -> bridge DLL
 # roundtrip incl. ABI checksum verification)
 .venv/Scripts/python -m pytest
 
