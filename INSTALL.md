@@ -208,7 +208,14 @@ Needs **Fabric Loader** and **Fabric API** installed in Minecraft first.
 
 4. Start `Eyetracker.exe` **before** Minecraft, and calibrate (`C`).
 
-5. In game:
+5. In game, press **`H`**. This is the step people miss: the mod starts
+   **off** and stays off until you toggle it, so a perfectly working
+   tracker can look exactly like a broken mod. On entering a world it now
+   prints a line saying whether it is on, whether packets are arriving,
+   and what the keys do:
+
+   > `[EyeTrack] Head tracking OFF (tracker found on UDP 47777). Press H to
+   > toggle, J to recentre.`
 
    | Key | Action |
    |---|---|
