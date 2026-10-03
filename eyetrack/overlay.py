@@ -1,20 +1,24 @@
 """On-screen HUD: what the tracker sees, at a glance.
 
 The overlay is the whole interface (the packaged exe has no terminal), so
-it has to answer three questions quickly:
+it has to answer four questions quickly:
 
-* **Is it tracking?** A status pill plus a face outline that only appears
-  when a face is actually found.
-* **Which way is each axis going?** Three meters with the value, a centre
-  tick and an explicit sign legend (``yaw  +12.3°   + = your left``). The
-  legend is the point: sign conventions are the number one source of
-  "the camera moves the wrong way" confusion.
-* **Is it calibrated?** The wizard replaces the bottom of the HUD with the
-  active step, progress pips and a live target dot.
+* **Is it tracking?** A status pill in the rail header plus a card in the
+  middle of the frame when nothing is found - the two states have to look
+  obviously different from across a desk.
+* **Which way is each axis going?** Three meters with a large numeric
+  readout in a gutter, a centre tick and an explicit sign legend
+  (``+ = your left``). The legend is the point: sign conventions are the
+  number one source of "the camera moves the wrong way" confusion.
+* **Is the game getting it?** Output chips at the bottom of the rail show
+  which sinks are live (TrackIR games, the Minecraft stream, the mouse).
+* **Is it calibrated?** While the wizard runs it owns a full-width card
+  along the bottom edge, with the active step, progress pips and a
+  viewfinder showing where to point.
 
-Two layouts: the full view over the camera image, and ``compact`` - a
-small always-on-top panel with just the meters, for keeping the numbers in
-your peripheral vision while a game has the focus.
+Two layouts: the full view over the camera image, and ``compact`` - a small
+always-on-top panel with just the numbers, for keeping the axes in your
+peripheral vision while a game has the focus.
 
 Everything is drawn with OpenCV primitives on purpose: no GUI toolkit, no
 extra dependency, and it keeps working inside the frozen build.
@@ -28,21 +32,57 @@ import sys
 import cv2
 import numpy as np
 
-from .calibrate import CalibrationWizard
+from .calibrate import STEPS, CalibrationWizard
 from .pose import HeadPose
 
 # --- palette (OpenCV is BGR) ---------------------------------------------
-_PANEL = (34, 29, 44)
-_PANEL_SOFT = (46, 40, 58)
-_TEXT = (240, 242, 248)
-_DIM = (150, 150, 168)
-_OK = (120, 226, 148)
-_WARN = (84, 172, 240)
-_GOLD = (198, 168, 104)
-_FACE = (160, 228, 196)
+_BG = (18, 15, 24)             # window backdrop / card shadow
+_PANEL = (30, 25, 39)          # card fill
+_PANEL_2 = (52, 45, 64)        # inset chips and meter tracks
+_LINE = (84, 75, 99)           # hairlines and borders
+_TEXT = (243, 245, 250)
+_MUTED = (166, 162, 182)
+_OK = (122, 226, 148)
+_WARN = (86, 170, 240)
+_GOLD = (206, 176, 110)
+_FACE = (168, 230, 200)
+_GLOW = (96, 138, 116)         # soft pass under the face contours
+_TRAIL_OLD = (88, 108, 96)     # oldest trail sample
+_TRAIL_NEW = (196, 245, 214)
 
 _FONT = cv2.FONT_HERSHEY_DUPLEX
 _FONT_SMALL = cv2.FONT_HERSHEY_SIMPLEX
+
+# --- layout ---------------------------------------------------------------
+_MARGIN = 18
+_RAIL_W = 364
+_PAD = 24
+_RADIUS = 18
+# Cards keep a fifth of the video behind them: enough to feel like a
+# heads-up display rather than a window pasted over the picture, opaque
+# enough to read a 0.5-scale label against a bright face.
+_PANEL_ALPHA = 0.90
+_CARD_ALPHA = 0.97              # centred cards: read-first, not seen-through
+_STRIP_H = 56
+_GAUGE_W = 176
+_GAUGE_H = 190
+_WIZARD_H = 148
+_NO_FACE_W = 560
+_NO_FACE_H = 132
+_HELP_W = 520
+_HELP_H = 316
+_TRAIL_LEN = 46
+
+# Rail rhythm. _draw_rail walks these and _rail_height adds them up, so the
+# card is always exactly as tall as the content inside it; a test asserts the
+# content still fits when the capture is short.
+_TITLE_H = 34          # title baseline offset from the top of the content
+_PILL_H = 34
+_METER_STEP = 46
+_POSITION_STEP = 27
+_CHIP_H = 28
+_CHIP_GAP = 8
+_CHIP_ROW_STEP = 36
 
 # --- MediaPipe canonical face-mesh contours -------------------------------
 # Drawn as closed polylines rather than 478 dots: it reads as a face, and
@@ -62,6 +102,20 @@ LIPS_INNER = (78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310,
               311, 312, 13, 82, 81, 80, 191)
 IRIS_R = (468, 469, 470, 471, 472)     # centre point + ring
 IRIS_L = (473, 474, 475, 476, 477)
+
+HELP_LINES = (
+    ("C", "calibration wizard (5 quick steps)"),
+    ("R", "re-centre on how you sit right now"),
+    ("M", "show / hide the face mesh"),
+    ("F", "switch camera view / compact HUD"),
+    ("H", "show or hide this help"),
+    ("Q", "quit"),
+)
+
+NO_FACE_LINES = (
+    "Move into frame and face the camera.",
+    "If the preview is black or frozen, run the app again with --pick-camera.",
+)
 
 
 # ---------------------------------------------------------------- helpers
@@ -83,11 +137,18 @@ def meter_fill(x: int, y: int, w: int, h: int, frac: float) -> tuple[int, int, i
 
 
 def round_rect(img, p1, p2, r, color, thickness=-1) -> None:
+    """A rounded rectangle built from two bars and four corner discs.
+
+    Deliberately *not* anti-aliased: three overlapping shapes, each blended
+    against the background on its own edge, leave a faint cross at every
+    corner where they meet. Hard-edged primitives land on the same pixels
+    and the seam disappears, and at these radii the jaggies cannot be seen.
+    """
     cv2.rectangle(img, (p1[0] + r, p1[1]), (p2[0] - r, p2[1]), color, thickness)
     cv2.rectangle(img, (p1[0], p1[1] + r), (p2[0], p2[1] - r), color, thickness)
     for cx, cy in ((p1[0] + r, p1[1] + r), (p2[0] - r, p1[1] + r),
                    (p1[0] + r, p2[1] - r), (p2[0] - r, p2[1] - r)):
-        cv2.circle(img, (cx, cy), r, color, thickness)
+        cv2.circle(img, (cx, cy), r, color, thickness, cv2.LINE_8)
 
 
 def put(img, text: str, org, scale: float, color, thickness: int = 1,
@@ -95,40 +156,138 @@ def put(img, text: str, org, scale: float, color, thickness: int = 1,
     cv2.putText(img, text, org, font, scale, color, thickness, cv2.LINE_AA)
 
 
+def text_w(text: str, scale: float, thickness: int = 1, font=_FONT_SMALL) -> int:
+    """Width of a whole string, measured in one go (kerning included)."""
+    return cv2.getTextSize(text, font, scale, thickness)[0][0]
+
+
 def put_right(img, text: str, org_right, scale: float, color,
               thickness: int = 1, font=_FONT) -> None:
-    (tw, _), _ = cv2.getTextSize(text, font, scale, thickness)
-    put(img, text, (org_right[0] - tw, org_right[1]), scale, color, thickness,
-        font)
+    put(img, text, (org_right[0] - text_w(text, scale, thickness, font),
+                    org_right[1]), scale, color, thickness, font)
 
 
-def draw_meter(img, mx, x: int, y: int, w: int, *, label: str, value: float,
+def put_run(img, text: str, org, scale: float, color,
+            thickness: int = 1, font=_FONT_SMALL) -> int:
+    """Draw a string, advancing one glyph at a time.
+
+    Needed by anything that has to lay itself out inside a fixed box (a
+    chip with a dot, a label and a width), where measuring the whole
+    string up front would not tell you where the middle falls.
+    """
+    x, y = org
+    for ch in text:
+        put(img, ch, (x, y), scale, color, thickness, font)
+        x += text_w(ch, scale, thickness, font)
+    return x
+
+
+def put_run_right(img, text: str, org_right, scale: float, color,
+                  thickness: int = 1, font=_FONT_SMALL) -> None:
+    put_run(img, text, (org_right[0] - text_w(text, scale, thickness, font),
+                        org_right[1]), scale, color, thickness, font)
+
+
+def caps_w(text: str, scale: float, track: int, thickness: int = 1,
+           font=_FONT_SMALL) -> int:
+    return text_w(text, scale, thickness, font) + track * max(0, len(text) - 1)
+
+
+def put_caps(img, text: str, org, scale: float, color, *, track: int = 3,
+             thickness: int = 1, font=_FONT_SMALL) -> int:
+    """A small-caps section label, letter-spaced so it reads as a heading."""
+    x = put_run(img, text, org, scale, color, thickness, font)
+    return x + track * max(0, len(text) - 1)
+
+
+def put_caps_right(img, text: str, org_right, scale: float, color, *,
+                   track: int = 3, thickness: int = 1,
+                   font=_FONT_SMALL) -> None:
+    put_caps(img, text, (org_right[0] - caps_w(text, scale, track, thickness,
+                                               font), org_right[1]),
+             scale, color, track=track, thickness=thickness, font=font)
+
+
+def fit_scale(text: str, max_w: int, start: float = 0.74,
+              floor: float = 0.34) -> float:
+    """Largest font scale at which ``text`` still fits in ``max_w`` pixels.
+
+    The prompts are user-visible sentences of varying length; shrinking
+    instead of clipping means a long one is smaller rather than cut off.
+    """
+    if max_w <= 0:
+        return floor
+    scale = start
+    while scale > floor and text_w(text, scale, 1, _FONT) > max_w:
+        scale -= 0.02
+    return max(scale, floor)
+
+
+def _lerp(a, b, t: float):
+    return tuple(int(round(a[i] + (b[i] - a[i]) * t)) for i in range(3))
+
+
+def draw_meter(img, x: int, y: int, w: int, *, label: str, value: float,
                full: float, legend: str, colour, tracking: bool,
-               value_w: int = 66) -> None:
+               value_w: int = 62) -> None:
     """One axis row: label + sign legend above a centre-anchored bar.
 
     Shared by the full view and the compact panel so the two can never
     drift apart.
 
-    ``mx`` maps a logical x through the mirror flip; the compact panel
-    passes the identity. The numeric readout sits in a gutter to the
-    right of the track instead of on top of it - printed over the fill it
-    was unreadable exactly when the value mattered most.
+    The numeric readout sits in a gutter to the right of the track instead
+    of on top of it - printed over the fill it was unreadable exactly when
+    the value mattered most.
     """
-    put(img, label, (mx(x), y), 0.42, _DIM, 1, _FONT_SMALL)
-    put_right(img, legend, (mx(x + w), y), 0.36, _DIM, 1, _FONT_SMALL)
+    put(img, label, (x, y), 0.48, _MUTED, 1, _FONT_SMALL)
+    put_right(img, legend, (x + w, y), 0.40, _MUTED, 1, _FONT_SMALL)
 
     bar_w = w - value_w
     bar_y = y + 8
-    round_rect(img, (mx(x), bar_y), (mx(x + bar_w), bar_y + 12), 6, _PANEL_SOFT)
+    round_rect(img, (x, bar_y), (x + bar_w, bar_y + 13), 6, _PANEL_2)
     if tracking:
-        x1, y1, x2, y2 = meter_fill(x, bar_y, bar_w, 12, clamp_frac(value, full))
-        round_rect(img, (mx(x1), y1), (mx(x2), y2), 6, colour)
+        x1, y1, x2, y2 = meter_fill(x, bar_y, bar_w, 13, clamp_frac(value, full))
+        round_rect(img, (x1, y1), (x2, y2), 6, colour)
     # centre tick sits proud of the track so "zero" is findable at a glance
-    cv2.line(img, (mx(x + bar_w // 2), bar_y - 2),
-             (mx(x + bar_w // 2), bar_y + 14), _TEXT, 1, cv2.LINE_AA)
-    put_right(img, f"{value:+5.1f}°", (mx(x + w), bar_y + 11), 0.4,
-              colour if tracking else _DIM, 1, _FONT_SMALL)
+    cv2.line(img, (x + bar_w // 2, bar_y - 2),
+             (x + bar_w // 2, bar_y + 15), _TEXT, 1, cv2.LINE_AA)
+    put_right(img, f"{value:+5.1f}°", (x + w, bar_y + 12), 0.5,
+              colour if tracking else _MUTED, 1, _FONT_SMALL)
+
+
+def chip_w(label: str) -> int:
+    return text_w(label.upper(), 0.46, 1, _FONT_SMALL) + 44
+
+
+def chip_rows(chips, width: int) -> int:
+    """Rows the output chips need at ``width``.
+
+    Takes either bare labels or ``(label, active)`` pairs, so it can be
+    asked about a set of names before any of them has a state. Shared by
+    the rail height and the rail layout, so the card is exactly as tall as
+    its content whether there is one chip or five.
+    """
+    rows, cx = 1, 0
+    for entry in chips:
+        name = entry[0] if isinstance(entry, (tuple, list)) else entry
+        cw = chip_w(str(name))
+        if cx and cx + cw > width:
+            rows, cx = rows + 1, 0
+        cx += cw + _CHIP_GAP
+    return rows
+
+
+def draw_chip(img, x: int, y: int, label: str, colour, *, on: bool = True,
+              h: int = 28) -> int:
+    """A pill with a state dot; returns its width so chips can be laid out."""
+    label = label.upper()
+    w = chip_w(label)
+    round_rect(img, (x, y), (x + w, y + h), h // 2, _PANEL_2 if on else _BG)
+    cv2.circle(img, (x + 14, y + h // 2), 4, colour if on else _LINE, -1,
+               cv2.LINE_AA)
+    put_run(img, label, (x + 24, y + h // 2 + 5), 0.46,
+            _TEXT if on else _MUTED, 1, _FONT_SMALL)
+    return w
 
 
 # ------------------------------------------------------------------ class
@@ -144,8 +303,10 @@ class Overlay:
         self.yaw_range = yaw_range
         self.pitch_range = pitch_range
         self.roll_range = roll_range
+        self.help_visible = False
         self._opened = False
         self._topmost_applied = False
+        self._trail: list[tuple[float, float]] = []
 
     # ------------------------------------------------------------------
     def close(self) -> None:
@@ -165,18 +326,33 @@ class Overlay:
         except cv2.error:
             return True
 
+    def toggle_help(self) -> bool:
+        self.help_visible = not self.help_visible
+        return self.help_visible
+
+    def toggle_mesh(self) -> bool:
+        self.show_mesh = not self.show_mesh
+        return self.show_mesh
+
+    def set_compact(self, compact: bool) -> bool:
+        self.compact = bool(compact)
+        return self.compact
+
     # ------------------------------------------------------------------
     def draw(self, frame: np.ndarray, pose: HeadPose, pose_out: dict[str, float],
              tracking: bool, fps: float, mirror: bool,
              wizard: CalibrationWizard | None = None,
-             status: str = "") -> int:
+             status: str = "", chips: tuple = (),
+             show_help: bool | None = None) -> int:
         """Render one frame; returns the key code from waitKey (or -1)."""
+        if show_help is not None:
+            self.help_visible = show_help
         if self.compact or frame is None:
-            img = self._compact_canvas(pose_out, tracking, fps, status)
+            img = self._compact_canvas(pose_out, tracking, fps, status, chips)
         else:
             img = cv2.flip(frame, 1) if mirror else frame
             img = self._compose(img, pose, pose_out, tracking, fps, mirror,
-                                wizard, status)
+                                wizard, status, chips)
 
         cv2.imshow(self.window, img)
         self._opened = True
@@ -197,181 +373,416 @@ class Overlay:
     # ==================================================================
     # full view
     def _compose(self, img, pose, pose_out, tracking, fps, mirror, wizard,
-                 status) -> np.ndarray:
+                 status, chips=()) -> np.ndarray:
         h, w = img.shape[:2]
-        flip = mirror  # every x coordinate below is pre-mirrored through this
 
-        def mx(x: int) -> int:
-            return w - x if flip else x
+        # Gaze trail first: it belongs to the video, and the cards are
+        # blended over it afterwards, so a card never gets a line scribbled
+        # across it.
+        self._update_trail(pose_out, tracking)
+        self._draw_trail(img, mirror)
 
-        # --- translucent layer, blended once -----------------------------
-        layer = img.copy()
-        head = 78
-        round_rect(layer, (mx(12), 10), (mx(w - 12), head), 16, _PANEL)
-        panel_w = 300
-        meters_h = 150
-        round_rect(layer, (mx(12), head + 14), (mx(12 + panel_w), head + 14 + meters_h),
-                   16, _PANEL)
-        trans_y = head + 26 + meters_h
-        round_rect(layer, (mx(12), trans_y), (mx(12 + panel_w), trans_y + 96),
-                   16, _PANEL)
-        cv2.addWeighted(layer, 0.62, img, 0.38, 0, dst=img)
-
-        # --- header -------------------------------------------------------
-        colour = _OK if tracking else _WARN
-        put(img, "EYETRACKER", (mx(28), 44), 0.62, _TEXT, 1)
-        pill_w = 118 if tracking else 132
-        round_rect(img, (mx(150), 22), (mx(150 + pill_w), 56), 17, _PANEL_SOFT)
-        cv2.circle(img, (mx(168), 39), 6, colour, -1)
-        put(img, "TRACKING" if tracking else "NO FACE",
-            (mx(182), 45), 0.5, colour, 1, _FONT_SMALL)
-        put(img, f"{fps:4.1f} fps", (mx(150 + pill_w + 14), 45), 0.5, _DIM, 1,
-            _FONT_SMALL)
-        if tracking:
-            put_right(img, "yaw {:+6.1f}   pitch {:+6.1f}   roll {:+6.1f}".format(
-                pose_out["yaw"], pose_out["pitch"], pose_out["roll"]),
-                (mx(w - 28), 45), 0.58, _TEXT, 1, _FONT_SMALL)
-
-        # --- meters -------------------------------------------------------
-        x0, y0, mw = 34, head + 40, panel_w - 44
-        put(img, "HEAD POSE", (mx(x0), y0 - 12), 0.44, _DIM, 1, _FONT_SMALL)
-        rows = (
-            ("YAW", pose_out["yaw"], self.yaw_range, "+ = your left", _OK),
-            ("PITCH", pose_out["pitch"], self.pitch_range, "+ = up", _GOLD),
-            ("ROLL", pose_out["roll"], self.roll_range, "+ = tilt left", _GOLD),
-        )
-        for i, (label, value, full, legend, colour) in enumerate(rows):
-            draw_meter(img, mx, x0, y0 + i * 38, mw, label=label, value=value,
-                       full=full, legend=legend, colour=colour,
-                       tracking=tracking)
-
-        # --- translation ---------------------------------------------------
-        put(img, "POSITION", (mx(x0), trans_y + 26), 0.44, _DIM, 1, _FONT_SMALL)
-        for i, (label, value) in enumerate((("X", pose_out["x"]), ("Y", pose_out["y"]),
-                                            ("Z", pose_out["z"]))):
-            y = trans_y + 44 + i * 18
-            put(img, label, (mx(x0), y), 0.4, _DIM, 1, _FONT_SMALL)
-            bx = x0 + 20
-            bw = mw - 78
-            round_rect(img, (mx(bx), y - 7), (mx(bx + bw), y + 1), 4, _PANEL_SOFT)
-            if tracking:
-                x1, y1, x2, y2 = meter_fill(bx, y - 7, bw, 8, clamp_frac(value, 25.0))
-                round_rect(img, (mx(x1), y1), (mx(x2), y2), 4, _GOLD)
-            put_right(img, f"{value:+5.1f} cm", (mx(x0 + mw), y), 0.38,
-                      _DIM, 1, _FONT_SMALL)
-
-        # --- attitude widget -----------------------------------------------
-        self._draw_attitude(img, w - 116, 196, 76, pose_out, tracking, mirror)
-
-        # --- face ----------------------------------------------------------
+        # Face under the cards: the contour is the loudest thing on screen,
+        # and drawn on top it cut straight through the help and calibration
+        # text. The cards are near-opaque, so it still reads as frosted.
         if pose.detected and pose.landmarks is not None:
             self._draw_face(img, pose, mirror, tracking)
 
-        # --- wizard / status ------------------------------------------------
-        if wizard is not None and not wizard.done and not wizard.cancelled:
-            self._draw_wizard(img, w, h, wizard, mirror)
-        elif wizard is not None and wizard.done:
-            put(img, "calibration saved - press C to redo", (mx(w // 2), h - 26),
-                0.52, _OK, 1)
-        elif status:
-            tw = cv2.getTextSize(status, _FONT, 0.52, 1)[0][0]
-            round_rect(img, (mx(w // 2 - tw // 2 - 16), h - 52),
-                       (mx(w // 2 + tw // 2 + 16), h - 10), 12, _PANEL)
-            put(img, status, (mx(w // 2 - tw // 2), h - 22), 0.52, _TEXT, 1)
+        boxes = self._layout(w, h, wizard, chips)
+        no_face = not tracking and wizard is None
+        extra = []
+        if no_face:
+            extra.append(self._centered(w, h, _NO_FACE_W, _NO_FACE_H))
+        if self.help_visible:
+            extra.append(self._centered(w, h, _HELP_W, _HELP_H))
+        cards = [b for b in (boxes["rail"], boxes["gauge"], boxes["strip"],
+                             boxes["wizard"]) if b is not None]
 
-        if not tracking:
-            put(img, "no face - light your face and look at the camera",
-                (mx(w // 2), 40), 0.5, _WARN, 1, _FONT_SMALL)
+        # --- one translucent layer for every edge card ------------------
+        layer = img.copy()
+        for x1, y1, x2, y2 in cards:
+            round_rect(layer, (x1 + 2, y1 + 4), (x2 + 2, y2 + 4), _RADIUS, _BG)
+            round_rect(layer, (x1, y1), (x2, y2), _RADIUS, _PANEL)
+            round_rect(layer, (x1, y1), (x2, y2), _RADIUS, _LINE, 1)
+        cv2.addWeighted(layer, _PANEL_ALPHA, img, 1.0 - _PANEL_ALPHA, 0, dst=img)
 
-        put(img, "C calibrate   R recentre   Q quit", (mx(28), h - 18), 0.44,
-            _DIM, 1, _FONT_SMALL)
+        # The centred cards get their own, far more opaque pass: they are
+        # the ones people actually read, and at the edge-card alpha the
+        # face contour still ghosted through the text.
+        if extra:
+            layer = img.copy()
+            for x1, y1, x2, y2 in extra:
+                round_rect(layer, (x1 + 2, y1 + 4), (x2 + 2, y2 + 4), _RADIUS, _BG)
+                round_rect(layer, (x1, y1), (x2, y2), _RADIUS, _PANEL)
+                round_rect(layer, (x1, y1), (x2, y2), _RADIUS, _LINE, 1)
+            cv2.addWeighted(layer, _CARD_ALPHA, img, 1.0 - _CARD_ALPHA, 0,
+                            dst=img)
+
+        # --- rail -------------------------------------------------------
+        self._draw_rail(img, boxes["rail"], pose_out, tracking, fps, chips)
+        self._draw_gauge(img, boxes["gauge"], pose_out, tracking, mirror)
+        self._draw_strip(img, w, h, boxes["strip"], status, fps)
+        if no_face:
+            self._draw_no_face(img, w, h)
+        if self.help_visible:
+            self._draw_help(img, w, h)
+        self._draw_wizard(img, w, h, wizard, boxes["wizard"])
         return img
+
+    @staticmethod
+    def _rail_height(chip_rows_: int = 1) -> int:
+        """Height of the rail card.
+
+        Walks exactly the same steps as :meth:`_draw_rail`, offset by the
+        card's top pad, so the card ends at the last row of content. If the
+        two ever drift apart the trail of tests fails, which is the point.
+        """
+        y = _PAD                          # top of the content
+        y += 10 + _PILL_H + 26            # status pill, then the divider
+        # (the title baseline is an offset from y, it does not advance it)
+        y += 24 + 20                      # "HEAD POSE" caption and its gap
+        y += 3 * _METER_STEP - 18         # three meters, then the divider
+        y += 24 + 20                      # "POSITION" caption and its gap
+        y += 3 * _POSITION_STEP - 8       # three translation rows + divider
+        y += 24 + 12                      # "OUTPUTS" caption and its gap
+        y += (chip_rows_ * _CHIP_ROW_STEP - (_CHIP_ROW_STEP - _CHIP_H))
+        return y + _PAD
+
+    # ------------------------------------------------------------------
+    # geometry
+    def _layout(self, w: int, h: int, wizard, chips=()) -> dict:
+        """Where each card sits, or None where there is no room for it."""
+        rail_x2 = _MARGIN + _RAIL_W
+        busy = _MARGIN * 2 + (_WIZARD_H if self._wizard_active(wizard) else _STRIP_H)
+        want = self._rail_height(chip_rows(chips, _RAIL_W - 2 * _PAD))
+        rail_h = max(200, min(want, h - busy))
+
+        gauge = None
+        gx1 = w - _MARGIN - _GAUGE_W
+        if gx1 > rail_x2 + _MARGIN and h > _MARGIN * 2 + _GAUGE_H:
+            gauge = (gx1, _MARGIN, w - _MARGIN, _MARGIN + _GAUGE_H)
+
+        strip = wizard_box = None
+        if h > _MARGIN * 2 + _STRIP_H:
+            if self._wizard_active(wizard):
+                wizard_box = (_MARGIN, h - _MARGIN - _WIZARD_H, w - _MARGIN,
+                              h - _MARGIN)
+            else:
+                strip = (_MARGIN, h - _MARGIN - _STRIP_H, w - _MARGIN,
+                         h - _MARGIN)
+        return {"rail": (_MARGIN, _MARGIN, rail_x2, _MARGIN + rail_h),
+                "gauge": gauge, "strip": strip, "wizard": wizard_box}
+
+    @staticmethod
+    def _wizard_active(wizard) -> bool:
+        return wizard is not None and not wizard.done and not wizard.cancelled
+
+    @staticmethod
+    def _centered(w: int, h: int, cw: int, ch: int) -> tuple:
+        """A centred card rect, in the same x1y1x2y2 shape as the edges."""
+        x1, y1 = (w - cw) // 2, (h - ch) // 2
+        return x1, y1, x1 + cw, y1 + ch
+
+    # ==================================================================
+    # rail
+    def _draw_rail(self, img, rail, pose_out, tracking, fps, chips) -> int:
+        """Draw the left rail; returns the y its content reached."""
+        if rail is None:
+            return 0
+        x1, y1, x2, y2 = rail
+        x0 = x1 + _PAD
+        w = (x2 - x1) - 2 * _PAD
+        right = x2 - _PAD
+
+        y = y1 + _PAD
+        put(img, "EYETRACKER", (x0, y + _TITLE_H), 0.72, _TEXT, 1)
+        put_right(img, f"{fps:4.1f} fps", (right, y + _TITLE_H), 0.52,
+                  _MUTED, 1, _FONT_SMALL)
+
+        # status pill: the single answer to "is it working?"
+        y += 10 + _PILL_H
+        colour = _OK if tracking else _WARN
+        label = "TRACKING" if tracking else "NO FACE"
+        pw = text_w(label, 0.56, 1, _FONT_SMALL) + 50
+        round_rect(img, (x0, y), (x0 + pw, y + _PILL_H), 17, _PANEL_2)
+        cv2.circle(img, (x0 + 19, y + _PILL_H // 2), 6, colour, -1, cv2.LINE_AA)
+        put_run(img, label, (x0 + 35, y + 23), 0.56, colour, 1, _FONT_SMALL)
+        put_right(img, "calibrated" if tracking else "searching",
+                  (right, y + 23), 0.46, _MUTED, 1, _FONT_SMALL)
+
+        y = self._divider(img, x0, right, y + 26)
+
+        put_caps(img, "HEAD POSE", (x0, y + 24), 0.46, _MUTED, track=3)
+        y += 22 + 16
+        for i, (lbl, value, full, legend, col) in enumerate((
+                ("YAW", pose_out["yaw"], self.yaw_range, "+ = your left", _OK),
+                ("PITCH", pose_out["pitch"], self.pitch_range, "+ = up", _GOLD),
+                ("ROLL", pose_out["roll"], self.roll_range, "+ = tilt left", _GOLD))):
+            draw_meter(img, x0, y + i * _METER_STEP, w, label=lbl,
+                       value=value, full=full, legend=legend, colour=col,
+                       tracking=tracking)
+        y = self._divider(img, x0, right, y + 3 * _METER_STEP - 18)
+
+        # The lower sections are the first to go on a short capture: the
+        # meters are what you read, the rest is reference.
+        if y + 130 < y2:
+            put_caps(img, "POSITION", (x0, y + 24), 0.46, _MUTED, track=3)
+            y += 22 + 16
+            for i, (lbl, value) in enumerate((("X", pose_out["x"]),
+                                              ("Y", pose_out["y"]),
+                                              ("Z", pose_out["z"]))):
+                ry = y + i * _POSITION_STEP
+                put(img, lbl, (x0, ry), 0.46, _MUTED, 1, _FONT_SMALL)
+                bx, bw = x0 + 22, w - 108
+                round_rect(img, (bx, ry - 7), (bx + bw, ry + 1), 4,
+                           _PANEL_2)
+                if tracking:
+                    xa, ya, xb, yb = meter_fill(bx, ry - 7, bw, 8,
+                                                clamp_frac(value, 25.0))
+                    round_rect(img, (xa, ya), (xb, yb), 4, _GOLD)
+                put_right(img, f"{value:+5.1f} cm", (right, ry), 0.46,
+                          _TEXT if tracking else _MUTED, 1, _FONT_SMALL)
+            y = self._divider(img, x0, right, y + 3 * _POSITION_STEP - 8)
+
+        if y + 66 < y2:
+            put_caps(img, "OUTPUTS", (x0, y + 24), 0.46, _MUTED, track=3)
+            y += 24 + 12
+            if not chips:
+                put_run(img, "none enabled", (x0, y + 19), 0.46, _MUTED, 1,
+                        _FONT_SMALL)
+                y += 19
+            else:
+                cx, cy = x0, y
+                for name, on in chips:
+                    name = str(name)
+                    cw = chip_w(name)
+                    if cx + cw > right and cx > x0:
+                        cx, cy = x0, cy + _CHIP_ROW_STEP
+                    draw_chip(img, cx, cy, name, _OK if on else _MUTED, on=on)
+                    cx += cw + _CHIP_GAP
+                y = cy + _CHIP_H
+        return y
+
+    def _divider(self, img, x0: int, right: int, y: int) -> int:
+        cv2.line(img, (x0, y), (right, y), _LINE, 1, cv2.LINE_AA)
+        return y
+
+    # ==================================================================
+    # view gauge
+    def _draw_gauge(self, img, box, pose_out, tracking, mirror) -> None:
+        if box is None:
+            return
+        x1, y1, x2, y2 = box
+        cx = (x1 + x2) // 2
+        put_caps(img, "VIEW", (x1 + 18, y1 + 22), 0.44, _MUTED, track=3)
+        r = min((x2 - x1) // 2 - 20, (y2 - y1 - 76) // 2)
+        if r >= 16:
+            cy = y1 + 34 + r
+            cv2.circle(img, (cx, cy), r, _LINE, 1, cv2.LINE_AA)
+            for gx in (cx - r + 9, cx + r - 9):        # cardinal ticks
+                cv2.line(img, (gx, cy - 5), (gx, cy + 5), _MUTED, 1, cv2.LINE_AA)
+            for gy in (cy - r + 9, cy + r - 9):
+                cv2.line(img, (cx - 5, gy), (cx + 5, gy), _MUTED, 1, cv2.LINE_AA)
+
+            roll = pose_out["roll"] if tracking else 0.0
+            span = int(r * 0.82)
+            half = int(span * math.cos(math.radians(roll)))
+            lift = int(span * math.sin(math.radians(roll)))
+            # Screen y grows downwards, and a mirror flips x: both cancel
+            # for the horizon, so roll reads as "the line follows your head".
+            cv2.line(img, (cx - half, cy + lift), (cx + half, cy + lift),
+                     _GOLD if tracking else _MUTED, 2, cv2.LINE_AA)
+
+            dx = int(clamp_frac(pose_out["yaw"], self.yaw_range) * (r - 12))
+            dy = int(-clamp_frac(pose_out["pitch"], self.pitch_range) * (r - 12))
+            if mirror:
+                dx = -dx
+            dot = (cx + dx, cy + dy)
+            cv2.line(img, (cx, cy), dot, _MUTED, 1, cv2.LINE_AA)
+            cv2.circle(img, dot, 5, _OK if tracking else _MUTED, -1, cv2.LINE_AA)
+
+        label = f"ROLL  {pose_out['roll']:+.0f} deg" if tracking else "ROLL  --"
+        put_right(img, label, (x2 - 18, y2 - 14), 0.46, _MUTED, 1, _FONT_SMALL)
+
+    # ==================================================================
+    # bottom strip
+    def _draw_strip(self, img, w, h, strip, status, fps) -> None:
+        if strip is None:
+            return
+        x1, y1, x2, _ = strip
+        left, right = x1 + 20, x2 - 20
+        mid = y1 + _STRIP_H // 2
+
+        put_run(img, "C  calibrate     R  recenter     H  help     Q  quit",
+                (left, mid + 5), 0.5, _MUTED, 1, _FONT_SMALL)
+        if status:
+            put_run_right(img, status, (right, mid + 5), 0.5, _OK, 1, _FONT_SMALL)
+        else:
+            put_right(img, f"{w}x{h}   {fps:4.1f} fps", (right, mid + 5), 0.5,
+                      _MUTED, 1, _FONT_SMALL)
+
+    # ==================================================================
+    # wizard
+    def _draw_wizard(self, img, w, h, wizard, box) -> None:
+        if wizard is None:
+            return
+        if wizard.cancelled:
+            self._draw_banner(img, w, h, "calibration cancelled - press C to retry",
+                              _WARN)
+            return
+        if wizard.done:
+            self._draw_banner(img, w, h, "calibration saved - press C to redo",
+                              _OK)
+            return
+        if box is None:
+            return
+
+        x1, y1, x2, y2 = box
+        left, right = x1 + _PAD, x2 - _PAD
+        step = wizard.step
+        index = min(max(0, getattr(wizard, "index", 0)), len(STEPS))
+        total = len(STEPS)
+        finder = 112
+        finder_x = right - finder
+
+        put_caps(img, "CALIBRATION", (left, y1 + 28), 0.46, _MUTED, track=3)
+        put_caps_right(img, f"STEP {index + 1} OF {total}", (right, y1 + 28), 0.46,
+                       _MUTED, track=3)
+
+        prompt = step.prompt if step is not None else "All done"
+        put_run(img, prompt, (left, y1 + 72),
+                fit_scale(prompt, finder_x - left - 30), _TEXT, 1, _FONT)
+
+        # progress: pips joined by a rail, filled up to the current step
+        py, pw = y2 - 30, 12
+        for i in range(total):
+            px = left + i * (pw * 2 + 8)
+            if i:
+                cv2.line(img, (px - pw - 4, py), (px, py),
+                         _OK if i <= index else _LINE, 2, cv2.LINE_AA)
+            cv2.circle(img, (px + pw, py), 9, _PANEL_2, -1, cv2.LINE_AA)
+            if i <= index:
+                cv2.circle(img, (px + pw, py), 5, _OK, -1, cv2.LINE_AA)
+        put_run_right(img, "SPACE  capture      ESC  skip", (finder_x - 28, y2 - 26),
+                      0.46, _MUTED, 1, _FONT_SMALL)
+
+        # viewfinder: where to point, big enough to read across a desk
+        fy1, fy2 = y1 + 16, y2 - 16
+        fcx, fcy = finder_x + finder // 2, (fy1 + fy2) // 2
+        round_rect(img, (finder_x, fy1), (right, fy2), 14, _BG)
+        cv2.line(img, (finder_x + 6, fcy), (right - 6, fcy), _LINE, 1, cv2.LINE_AA)
+        cv2.line(img, (fcx, fy1 + 6), (fcx, fy2 - 6), _LINE, 1, cv2.LINE_AA)
+        if step is not None and step.dot is not None:
+            dx = int(finder_x + step.dot[0] * finder)
+            dy = int(fy1 + step.dot[1] * (fy2 - fy1))
+            cv2.circle(img, (dx, dy), 18, _OK, 2, cv2.LINE_AA)
+            cv2.circle(img, (dx, dy), 5, _OK, -1, cv2.LINE_AA)
+
+    def _draw_banner(self, img, w, h, text: str, colour) -> None:
+        """A single centred pill for one-off confirmations."""
+        tw = text_w(text, 0.54, 1, _FONT)
+        x1, x2 = w // 2 - tw // 2 - 20, w // 2 + tw // 2 + 20
+        y = h - _MARGIN - _STRIP_H - _MARGIN - 46
+        if y < _MARGIN:
+            y = h - _MARGIN - 46
+        round_rect(img, (x1, y), (x2, y + 42), 13, _PANEL)
+        put_right(img, text, (x2 - 20, y + 28), 0.54, colour, 1)
+
+    # ==================================================================
+    # centred cards
+    def _draw_no_face(self, img, w, h) -> None:
+        x1, y1 = (w - _NO_FACE_W) // 2, (h - _NO_FACE_H) // 2
+        put(img, "NO FACE DETECTED", (x1 + _PAD, y1 + 44), 0.72, _WARN, 1)
+        for i, line in enumerate(NO_FACE_LINES):
+            put(img, line, (x1 + _PAD, y1 + 82 + i * 26), 0.52,
+                _TEXT if i == 0 else _MUTED, 1, _FONT_SMALL)
+
+    def _draw_help(self, img, w, h) -> None:
+        x1, y1 = (w - _HELP_W) // 2, (h - _HELP_H) // 2
+        put(img, "KEYS", (x1 + _PAD, y1 + 46), 0.72, _TEXT, 1)
+        y = y1 + 80
+        for key, what in HELP_LINES:
+            round_rect(img, (x1 + _PAD, y - 17), (x1 + _PAD + 36, y + 2), 6,
+                       _PANEL_2)
+            put(img, key, (x1 + _PAD + 13, y - 1), 0.5, _TEXT, 1, _FONT_SMALL)
+            put(img, what, (x1 + _PAD + 56, y), 0.54, _MUTED, 1, _FONT_SMALL)
+            y += 38
 
     # ==================================================================
     # compact HUD (no camera image, small, always-on-top friendly)
-    def _compact_canvas(self, pose_out, tracking, fps, status) -> np.ndarray:
-        w, h = 460, 250
-        img = np.full((h, w, 3), _PANEL[0], np.uint8)
-        img[:] = (26, 22, 34)
+    def _compact_canvas(self, pose_out, tracking, fps, status,
+                        chips=()) -> np.ndarray:
+        w, h = 468, 268
+        # Fill the whole canvas with the shadow colour: the rounded card
+        # inside it then reads as rounded against the window, because the
+        # window shows the image and nothing else.
+        img = np.full((h, w, 3), _BG, np.uint8)
+        round_rect(img, (2, 2), (w - 3, h - 3), 16, _PANEL)
+        round_rect(img, (2, 2), (w - 3, h - 3), 16, _LINE, 1)
+
         colour = _OK if tracking else _WARN
+        label = "TRACKING" if tracking else "NO FACE"
+        cv2.circle(img, (32, 36), 6, colour, -1, cv2.LINE_AA)
+        put_run(img, label, (46, 41), 0.52, colour, 1, _FONT_SMALL)
+        put_right(img, f"{fps:4.1f} fps", (w - 20, 41), 0.46, _MUTED, 1,
+                  _FONT_SMALL)
+        cv2.line(img, (20, 58), (w - 20, 58), _LINE, 1, cv2.LINE_AA)
 
-        cv2.circle(img, (30, 34), 6, colour, -1)
-        put(img, "TRACKING" if tracking else "NO FACE", (44, 40), 0.5, colour,
-            1, _FONT_SMALL)
-        put_right(img, f"{fps:4.1f} fps", (w - 18, 40), 0.45, _DIM, 1, _FONT_SMALL)
-
-        x0, mw = 26, w - 190
-        identity = lambda v: v  # compact panel is never mirrored
-        for i, (label, value, full, legend, col) in enumerate((
+        x0, mw = 20, 288
+        for i, (lbl, value, full, legend, col) in enumerate((
                 ("YAW", pose_out["yaw"], self.yaw_range, "+ left", _OK),
                 ("PITCH", pose_out["pitch"], self.pitch_range, "+ up", _GOLD),
                 ("ROLL", pose_out["roll"], self.roll_range, "+ tilt", _GOLD))):
-            draw_meter(img, identity, x0, 76 + i * 40, mw, label=label,
-                       value=value, full=full, legend=legend, colour=col,
-                       tracking=tracking)
+            draw_meter(img, x0, 88 + i * 42, mw, label=lbl, value=value,
+                       full=full, legend=legend, colour=col, tracking=tracking)
 
-        self._draw_attitude(img, w - 78, 118, 52, pose_out, tracking, False)
-        put(img, "x {:+5.1f}  y {:+5.1f}  z {:+5.1f} cm".format(
+        self._draw_gauge(img, (312, 62, w - 16, 212), pose_out, tracking, False)
+
+        cv2.line(img, (20, h - 54), (w - 20, h - 54), _LINE, 1, cv2.LINE_AA)
+        put_run(img, "x {:+5.1f}  y {:+5.1f}  z {:+5.1f} cm".format(
             pose_out["x"], pose_out["y"], pose_out["z"]),
-            (x0, h - 24), 0.42, _DIM, 1, _FONT_SMALL)
+            (20, h - 24), 0.46, _MUTED, 1, _FONT_SMALL)
         if status:
-            put_right(img, status, (w - 18, h - 24), 0.4, _OK, 1, _FONT_SMALL)
+            put_right(img, status, (w - 20, h - 24), 0.44, _OK, 1, _FONT_SMALL)
+        elif chips:
+            put_right(img, " ".join(str(n).upper() for n, _ in chips),
+                      (w - 20, h - 24), 0.42, _MUTED, 1, _FONT_SMALL)
         return img
 
     # ==================================================================
-    def _draw_attitude(self, img, cx, cy, r, pose_out, tracking, mirror) -> None:
-        """Ring + tilting horizon (roll) + a dot for where you are looking."""
-        cv2.circle(img, (cx, cy), r, _PANEL_SOFT, 1, cv2.LINE_AA)
-        cv2.circle(img, (cx, cy), r - 1, _PANEL, 1, cv2.LINE_AA)
-        for gx in (cx - r + 6, cx + r - 6):      # tick marks
-            cv2.line(img, (gx, cy - 4), (gx, cy + 4), _DIM, 1, cv2.LINE_AA)
+    # gaze trail
+    def _update_trail(self, pose_out, tracking: bool) -> None:
+        if not tracking:
+            self._trail.clear()
+            return
+        self._trail.append((clamp_frac(pose_out["yaw"], self.yaw_range),
+                            clamp_frac(pose_out["pitch"], self.pitch_range)))
+        if len(self._trail) > _TRAIL_LEN:
+            del self._trail[:len(self._trail) - _TRAIL_LEN]
 
-        roll = pose_out["roll"] if tracking else 0.0
-        span = int(r * 0.8)
-        half = int(span * math.cos(math.radians(roll)))
-        lift = int(span * math.sin(math.radians(roll)))
-        # Screen y grows downwards, and a mirror flips x: both cancel for the
-        # horizon, so roll reads as "the line follows your head".
-        cv2.line(img, (cx - half, cy + lift), (cx + half, cy + lift),
-                 _GOLD if tracking else _DIM, 2, cv2.LINE_AA)
+    def _draw_trail(self, img, mirror: bool) -> None:
+        """Recent gaze, projected onto the frame and fading out behind.
 
-        dx = int(clamp_frac(pose_out["yaw"] / 40.0, 1.0) * (r - 10))
-        dy = int(-clamp_frac(pose_out["pitch"] / 40.0, 1.0) * (r - 10))
-        if mirror:
-            dx = -dx
-        cv2.circle(img, (cx + dx, cy + dy), 5, _OK if tracking else _DIM, -1,
-                   cv2.LINE_AA)
+        Drawn from the calibrated axes rather than from the landmark
+        positions so it stays put when the mesh is hidden, and it makes
+        head jitter visible at a glance instead of hiding it in the meters.
+        """
+        n = len(self._trail)
+        if n < 2:
+            return
+        h, w = img.shape[:2]
 
-    def _draw_wizard(self, img, w, h, wizard, mirror) -> None:
-        step = wizard.step
-        total = len(wizard.captures) + (1 if step is not None else 0)
-        box_h = 92
-        top = h - box_h - 46
-        layer = img.copy()
-        round_rect(layer, (w // 2 - 250, top), (w // 2 + 250, top + box_h), 14,
-                   _PANEL)
-        cv2.addWeighted(layer, 0.75, img, 0.25, 0, dst=img)
+        def pt(s):
+            x = int(w * 0.5 + s[0] * w * 0.3)
+            y = int(h * 0.5 - s[1] * h * 0.3)
+            return (w - x if mirror else x, y)
 
-        title = "CALIBRATION" if step else "DONE"
-        put(img, title, (w // 2 - 228, top + 26), 0.48, _DIM, 1, _FONT_SMALL)
-        prompt = wizard.prompt
-        put(img, prompt, (w // 2 - 228, top + 56), 0.62, _TEXT, 1)
-
-        # progress pips
-        for i in range(5):
-            px = w // 2 + 180 + i * 16
-            done = i < total
-            cv2.circle(img, (px, top + 52), 5, _OK if done else _PANEL_SOFT,
-                       -1, cv2.LINE_AA)
-
-        if step is not None and step.dot is not None:
-            dx = int(step.dot[0] * w)
-            dy = int(top + 14 + step.dot[1] * (box_h - 28))
-            cv2.circle(img, (dx, dy), 15, _OK, 2, cv2.LINE_AA)
-            cv2.circle(img, (dx, dy), 4, _OK, -1, cv2.LINE_AA)
-
-        put(img, "SPACE capture   ESC cancel", (w // 2 - 228, top + 82), 0.42,
-            _DIM, 1, _FONT_SMALL)
+        for i in range(1, n):
+            f = (i + 1) / n
+            cv2.line(img, pt(self._trail[i - 1]), pt(self._trail[i]),
+                     _lerp(_TRAIL_OLD, _TRAIL_NEW, f),
+                     2 if f < 0.65 else 3, cv2.LINE_AA)
+        cv2.circle(img, pt(self._trail[-1]), 6, _TRAIL_NEW, -1, cv2.LINE_AA)
 
     # ------------------------------------------------------------------
     def _draw_face(self, img, pose: HeadPose, mirror: bool, tracking: bool) -> None:
@@ -386,15 +797,18 @@ class Overlay:
 
         def poly(indices, closed=True, colour=_FACE, thick=1):
             pts = np.array([pt(i) for i in indices], np.int32)
-            # Soft glow: a wide dim pass under a thin bright one.
-            cv2.polylines(img, [pts], closed, colour, thick + 2, cv2.LINE_AA)
+            # Soft glow: a wide dim pass under a thin bright one. The dim
+            # pass is what stops the contours reading as neon tubing.
+            cv2.polylines(img, [pts], closed, _lerp(_GLOW, colour, 0.3),
+                          thick + 2, cv2.LINE_AA)
             cv2.polylines(img, [pts], closed, colour, thick, cv2.LINE_AA)
 
         if self.show_mesh:
-            # Dense mesh as faint dots, every other point to keep it cheap.
-            for i in range(0, len(lms), 2):
+            # Dense mesh as faint dots, every third point to keep it cheap
+            # and quiet - at every other point it read as sensor noise.
+            for i in range(0, len(lms), 3):
                 x, y = pt(i)
-                cv2.circle(img, (x, y), 1, (90, 120, 110), -1)
+                cv2.circle(img, (x, y), 1, (74, 100, 92), -1)
 
         poly(FACE_OVAL, True, _FACE, 1)
         for brow in BROWS:
@@ -408,4 +822,4 @@ class Overlay:
 
         # Nose bridge marker: makes head rotation obvious at a glance.
         p0, p1 = pt(168), pt(6)
-        cv2.line(img, p0, p1, _OK if tracking else _DIM, 1, cv2.LINE_AA)
+        cv2.line(img, p0, p1, _OK if tracking else _MUTED, 2, cv2.LINE_AA)

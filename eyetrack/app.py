@@ -15,10 +15,18 @@ from .filters import PoseFilter
 from .overlay import Overlay
 from .outputs import build_outputs
 from .pose import HeadPose, HeadPoseEstimator
+from .splash import Splash
 
-HELP_STATUS = "keys:  C calibrate   R recenter   Q quit"
-SETUP_STATUS = ("first run - C skips setup and starts tracking anyway"
-                "   SPACE captures")
+# Short labels for the rail's output chips. The full names are too long to
+# fit three to a row, and "the stream is on" is the question being asked.
+CHIP_LABELS = {
+    "game-link": "TrackIR",
+    "udp": "Minecraft",
+    "mouse": "Mouse",
+}
+
+HELP_STATUS = "press H for the key list"
+SETUP_STATUS = "first run - C skips setup and starts tracking anyway"
 
 
 def _prompt_for_camera(cfg: Config, config_path: Path) -> None:
@@ -109,6 +117,24 @@ def _apply_gains(cfg: Config, pose: dict[str, float]) -> dict[str, float]:
     }
 
 
+def _output_chips(outputs, tracking: bool) -> tuple:
+    """``(label, active)`` pairs for the rail's output chips.
+
+    An output is only "active" while a face is being tracked, because that
+    is exactly when it is actually sending: a disabled-but-configured sink
+    would otherwise look like it is working.
+    """
+    chips = []
+    for out in outputs:
+        label = CHIP_LABELS.get(out.name, out.name)
+        if out.name == "mouse":
+            active = tracking and getattr(out, "active", True)
+        else:
+            active = tracking
+        chips.append((label, bool(active)))
+    return tuple(chips)
+
+
 def _auto_detect(cfg: Config, config_path: Path, estimator) -> CameraProbe | None:
     """Find a camera that actually shows a face, and remember it.
 
@@ -121,12 +147,27 @@ def _auto_detect(cfg: Config, config_path: Path, estimator) -> CameraProbe | Non
     def detect(frame):
         return estimator.process(frame, int(time.monotonic() * 1000)).detected
 
-    found = detect_camera(
-        face_detector=detect,
-        prefer_name=cfg.camera.device_name,
-        width=cfg.camera.width, height=cfg.camera.height, fps=cfg.camera.fps,
-        on_progress=lambda d: print(f"[setup] trying camera {d}"))
+    tried: list[str] = []
+
+    def progress(dev) -> None:
+        tried.append(getattr(dev, "name", "") or f"camera {getattr(dev, 'index', '?')}")
+        splash.update(
+            "Looking for your camera",
+            f"testing {tried[-1]}...",
+            note=f"{len(tried)} device{'' if len(tried) == 1 else 's'} tried"
+                 f"{' - this one is being given a few seconds' if len(tried) == 1 else ''}")
+        print(f"[setup] trying camera {tried[-1]}")
+
+    with Splash() as splash:
+        found = detect_camera(
+            face_detector=detect,
+            prefer_name=cfg.camera.device_name,
+            width=cfg.camera.width, height=cfg.camera.height, fps=cfg.camera.fps,
+            on_progress=progress)
+
     if found is None:
+        splash.finish("No camera found",
+                      "connect a webcam, or run the app again with --pick-camera")
         print("[setup] no camera found - open the app's camera settings "
               "or run --pick-camera to choose one manually")
         return None
@@ -135,6 +176,7 @@ def _auto_detect(cfg: Config, config_path: Path, estimator) -> CameraProbe | Non
     if found.name:
         cfg.camera.device_name = found.name
     kind = "a face" if found.face else "frames, but no face yet"
+    splash.finish("Camera found", f"{found.name or found.index} - {kind}")
     print(f"[setup] using '{found.name or found.index}' - {kind} "
           f"({found.seconds:.1f}s)")
     try:
@@ -173,8 +215,6 @@ def run(cfg: Config, *, config_path: Path, start_wizard: bool = False,
         out.start()
         print(f"[eyetrack] output enabled: {out.name}")
 
-    mouse_out = next((o for o in outputs if o.name == "mouse"), None)
-
     overlay = Overlay(cfg.overlay.window, cfg.overlay.show_mesh,
                       top_most=cfg.overlay.top_most, compact=cfg.overlay.compact,
                       yaw_range=cfg.pose.yaw_range,
@@ -182,15 +222,13 @@ def run(cfg: Config, *, config_path: Path, start_wizard: bool = False,
                       roll_range=cfg.pose.roll_range) if cfg.overlay.enabled else None
     wizard = CalibrationWizard(cfg.pose.yaw_range, cfg.pose.pitch_range,
                                cfg.pose.reference_distance_cm) if start_wizard else None
-    if wizard is not None:
-        status = SETUP_STATUS if first_run else "calibration started"
 
     last_raw: HeadPose | None = None
     last_out = {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "x": 0.0, "y": 0.0, "z": 0.0}
     fps_ema = 0.0
     t_last = time.monotonic()
     auto_recentered = False
-    status = HELP_STATUS
+    status = SETUP_STATUS if (first_run and wizard is not None) else HELP_STATUS
 
     try:
         while True:
@@ -232,12 +270,10 @@ def run(cfg: Config, *, config_path: Path, start_wizard: bool = False,
                 out.send(last_out, tracking, t)
 
             if overlay is not None and frame is not None:
-                status_line = status
-                if mouse_out is not None:
-                    status_line += "   " + mouse_out.status_text()
+                chips = _output_chips(outputs, tracking)
                 key = overlay.draw(frame, pose, last_out, tracking, fps_ema,
-                                   cfg.camera.mirror, wizard, status_line)
-                status = HELP_STATUS
+                                   cfg.camera.mirror, wizard, status, chips)
+                status = ""
                 # On a fresh install ESC means "skip setup and just track":
                 # quitting outright leaves someone who only wanted to try it
                 # with no camera chosen and no calibration at all.
@@ -260,6 +296,21 @@ def run(cfg: Config, *, config_path: Path, start_wizard: bool = False,
                         calib.save()
                         filt.reset()
                         status = "re-centred"
+                elif key == ord("h"):
+                    status = ("help hidden - press H to show it again"
+                              if overlay.toggle_help() else "")
+                elif key == ord("m"):
+                    status = "face mesh off" if not overlay.toggle_mesh() else ""
+                elif key == ord("f"):
+                    cfg.overlay.compact = overlay.set_compact(
+                        not overlay.compact)
+                    cfg.overlay.show_mesh = overlay.show_mesh
+                    status = "compact HUD - press F for the camera view" \
+                        if overlay.compact else "camera view"
+                    try:
+                        cfg.save(config_path)
+                    except OSError:
+                        pass
                 elif key == ord(" ") and wizard is not None:
                     if last_raw is not None:
                         wizard.submit(last_raw)

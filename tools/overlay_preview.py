@@ -90,8 +90,12 @@ def webcam_crop(frame, pose, out_w: int = 1280, out_h: int = 720, margin: float 
     return cv2.resize(crop, (out_w, out_h), interpolation=cv2.INTER_AREA)
 
 
+CHIPS = (("TrackIR", True), ("Minecraft", True), ("Mouse", False))
+
+
 def render(image_path: Path, out_values: dict[str, float], *, compact: bool,
-           wizard: bool = False, status: str = "") -> np.ndarray:
+           wizard: bool = False, status: str = "", tracking: bool = True,
+           help_: bool = False) -> np.ndarray:
     frame = cv2.imread(str(image_path))
     if frame is None:
         raise SystemExit(f"cannot read {image_path}")
@@ -109,11 +113,18 @@ def render(image_path: Path, out_values: dict[str, float], *, compact: bool,
           f"yaw={pose2.yaw:+.1f} pitch={pose2.pitch:+.1f} roll={pose2.roll:+.1f}")
     pose = pose2
 
-    ov = Overlay(show_mesh=True, compact=compact)
-    wiz = _StaticWizard() if wizard else None
-    img = ov._compact_canvas(out_values, True, 58.4, status) if compact else \
-        ov._compose(frame.copy(), pose, out_values, True, 58.4, False, wiz, status)
-    return img
+    if compact:
+        return Overlay(show_mesh=True, compact=True)._compact_canvas(
+            out_values, tracking, 58.4, status, CHIPS)
+
+    ov = Overlay(show_mesh=True, compact=False)
+    ov.help_visible = help_
+    # A few frames of trail, so the render shows a path rather than a dot.
+    for dy, dx in ((0, 0), (.1, -.05), (.2, -.12), (.15, -.22), (.05, -.3)):
+        ov._update_trail({"yaw": out_values["yaw"] + dy * 40,
+                          "pitch": out_values["pitch"] + dx * 30}, True)
+    return ov._compose(frame.copy(), pose, out_values, tracking, 58.4, False,
+                       _StaticWizard() if wizard else None, status, CHIPS)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -137,7 +148,9 @@ def main(argv: list[str] | None = None) -> int:
     for name, kwargs in (
         ("full", dict(compact=False)),
         ("wizard", dict(compact=False, wizard=True)),
-        ("compact", dict(compact=True, status="tracking")),
+        ("noface", dict(compact=False, tracking=False)),
+        ("help", dict(compact=False, help_=True)),
+        ("compact", dict(compact=True, status="calibration saved")),
     ):
         print(f"rendering {name}...")
         img = render(args.image, values, **kwargs)
