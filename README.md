@@ -88,6 +88,8 @@ where you choose a camera and set things up; the **tracker window** is what
 appears once you press Start, and it is the interface while you play — the
 packaged exe has no terminal.
 
+![the settings window](docs/settings.jpg)
+
 ![the HUD while tracking](docs/tracking.jpg)
 
 | Where | What it tells you |

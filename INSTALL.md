@@ -36,6 +36,8 @@ There is no installer. You download one file and run it.
    Windows reports and shows a live picture of the one currently selected,
    so you can tell a webcam from a virtual camera before you commit.
 
+   ![the settings window](docs/settings.jpg)
+
    > **First launch takes a few seconds** — it unpacks itself into a temp
    > folder before the window appears. A console window may flash past;
    > that's normal.

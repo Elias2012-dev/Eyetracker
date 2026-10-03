@@ -33,6 +33,8 @@ from .config import Config
 from .overlay import Overlay
 from .preview import PREVIEW_MAX_H, PREVIEW_MAX_W, CameraPreview, frame_to_ppm
 from .session import TrackingSession
+from .theme import (ACCENT_DIM, BG, CARD, CARD_HI, FONT_SMALL, LINE, MUTED,
+                    TEXT, StatusPill, Toggle, apply_theme)
 
 # How often the Tk event loop wakes to poll the worker. Fast enough that the
 # HUD looks live, slow enough that the UI thread is not the bottleneck.
@@ -183,7 +185,7 @@ class TrackerWindow:
         self.controller = TrackerController(cfg, config_path)
         self.root = tk.Tk()
         self.root.title("Eyetracker")
-        self.root.minsize(520, 620)
+        self.root.minsize(600, 560)
         self._closing = False
         self._overlay: Overlay | None = None
         self._results: queue.Queue = queue.Queue(maxsize=_QUEUE_DEPTH)
@@ -220,139 +222,213 @@ class TrackerWindow:
         y = max(0, min((screen_h - height) // 2, (screen_h - height) // 4))
         self.root.geometry(f"+{x}+{y}")
 
-    # ==================================================================
+# ==================================================================
     # layout
-    def _build(self) -> None:
-        top = ttk.Frame(self.root, padding=12)
-        top.pack(fill="x")
-        ttk.Label(top, text="Eyetracker",
-                  font=("Segoe UI", 16, "bold")).pack(side="left")
-        self.version_label = ttk.Label(top, text="", foreground="#666")
-        self.version_label.pack(side="right")
+    def _section(self, parent, title: str):
+        """A titled card. The stock LabelFrame draws a grey etched box with a
+        punched-out title; on a dark background that reads as a hole, so the
+        card is drawn flat with the title in small caps above the content."""
+        card = tk.Frame(parent, bg=CARD, highlightthickness=1,
+                        highlightbackground=LINE, highlightcolor=LINE)
+        head = tk.Frame(card, bg=CARD)
+        head.pack(fill="x", padx=14, pady=(12, 0))
+        ttk.Label(head, text=title.upper(), style="Muted.TLabel").pack(side="left")
+        body = tk.Frame(card, bg=CARD)
+        body.pack(fill="both", expand=True, padx=14, pady=(8, 14))
+        card.body = body
+        return card
 
-        # --- start / stop -------------------------------------------
-        bar = ttk.Frame(self.root, padding=(12, 0, 12, 8))
-        bar.pack(fill="x")
+    def _toggle_row(self, parent, text: str, var, command=None):
+        """A label with a pill switch on the right.
+
+        ttk.Checkbutton draws a Windows box that clam will not recolour, and
+        a row of six identical grey boxes was the least designed part of the
+        old window."""
+        row = tk.Frame(parent, bg=CARD)
+        row.pack(fill="x", pady=3)
+        lbl = ttk.Label(row, text=text, style="TLabel")
+        lbl.pack(side="left")
+        sw = Toggle(row, var, command=command, on_text="on", off_text="off")
+        sw.canvas.pack(side="right")
+        # Clicking the label is what people actually try.
+        lbl.bind("<Button-1>", lambda _e: sw._click())
+        lbl.configure(cursor="hand2")
+        sw.canvas.configure(cursor="hand2")
+        return sw
+
+    def _build(self) -> None:
+        self.style = apply_theme(self.root)
+
+        outer = tk.Frame(self.root, bg=BG)
+        outer.pack(fill="both", expand=True)
+        pad = tk.Frame(outer, bg=BG, padx=20, pady=14)
+        pad.pack(fill="both", expand=True)
+
+        # --- header ----------------------------------------------------
+        top = tk.Frame(pad, bg=BG)
+        top.pack(fill="x")
+        titles = tk.Frame(top, bg=BG)
+        titles.pack(side="left")
+        tk.Label(titles, text="EYETRACKER", bg=BG, fg=TEXT,
+                 font=("Segoe UI", 17, "bold")).pack(anchor="w")
+        tk.Label(titles, text="head tracking from any webcam", bg=BG,
+                 fg=MUTED, font=FONT_SMALL).pack(anchor="w")
+        self.pill = StatusPill(top, text="Ready")
+        self.pill.canvas.pack(side="right", anchor="n", pady=(2, 0))
+        self.version_label = ttk.Label(top, text="", style="Muted.TLabel")
+        self.version_label.pack(side="right", padx=(0, 14))
+
+        # --- start / stop ---------------------------------------------
+        bar = tk.Frame(pad, bg=BG)
+        bar.pack(fill="x", pady=(16, 14))
         self.start_button = ttk.Button(bar, text="Start tracking",
-                                       command=self.on_start_stop, width=18)
+                                       style="Primary.TButton",
+                                       command=self.on_start_stop)
         self.start_button.pack(side="left")
         self.recentre_button = ttk.Button(bar, text="Re-centre",
-                                          command=self.on_recentre, state="disabled")
-        self.recentre_button.pack(side="left", padx=6)
+                                          command=self.on_recentre,
+                                          state="disabled")
+        self.recentre_button.pack(side="left", padx=(8, 0))
         self.calibrate_button = ttk.Button(bar, text="Calibrate",
-                                           command=self.on_calibrate, state="disabled")
-        self.calibrate_button.pack(side="left")
-        self.status_label = ttk.Label(bar, text="Ready")
-        self.status_label.pack(side="left", padx=12)
+                                           command=self.on_calibrate,
+                                           state="disabled")
+        self.calibrate_button.pack(side="left", padx=(8, 0))
 
         # --- camera ---------------------------------------------------
-        cam = ttk.LabelFrame(self.root, text="Camera", padding=10)
-        cam.pack(fill="x", padx=12)
+        cam_card = self._section(pad, "Camera")
+        cam_card.pack(fill="x")
+        cam = cam_card.body
         self.camera_list = tk.Listbox(cam, height=4, exportselection=False,
-                                      activestyle="none")
+                                      activestyle="none", bd=0,
+                                      highlightthickness=1,
+                                      highlightbackground=LINE,
+                                      bg=CARD, fg=TEXT,
+                                      selectbackground=ACCENT_DIM,
+                                      selectforeground=TEXT)
         self.camera_list.pack(fill="x")
         self.camera_list.bind("<<ListboxSelect>>", self.on_camera_selected)
 
-        # A name in a list tells you nothing about what the lens sees. This
-        # is the picture for the selected camera, at tracking resolution.
-        self.preview_box = tk.Frame(cam, bg="#0d1117",
-                                    width=PREVIEW_MAX_W, height=PREVIEW_MAX_H,
+        # A name in a list tells you nothing about what the lens sees.
+        self.preview_box = tk.Frame(cam, bg="#0B0A0C",
+                                    height=PREVIEW_MAX_H,
                                     highlightthickness=1,
-                                    highlightbackground="#30363d")
-        self.preview_box.pack(pady=(8, 0))
-        self.preview_box.pack_propagate(False)   # hold the size we reserved
-        self.preview_label = tk.Label(self.preview_box, bg="#0d1117",
-                                      fg="#8b949e", text="starting preview...")
+                                    highlightbackground=LINE)
+        self.preview_box.pack(fill="x", pady=(10, 0))
+        self.preview_box.pack_propagate(False)
+        self.preview_label = tk.Label(self.preview_box, bg="#0B0A0C",
+                                      fg=MUTED, font=FONT_SMALL,
+                                      text="starting preview...")
         self.preview_label.pack(expand=True, fill="both")
-        self.preview_info = ttk.Label(cam, text="", foreground="#666")
-        self.preview_info.pack(anchor="w")
+        self.preview_info = ttk.Label(cam, text="", style="Muted.TLabel")
+        self.preview_info.pack(anchor="w", pady=(6, 0))
 
-        row = ttk.Frame(cam)
-        row.pack(fill="x", pady=(8, 0))
-        ttk.Label(row, text="Mode:").pack(side="left")
-        self.mirror_var = tk.BooleanVar(value=self.cfg.camera.mirror)
-        ttk.Checkbutton(row, text="Mirror preview", variable=self.mirror_var,
-                        command=self.on_mirror).pack(side="left")
-
-        res = ttk.Frame(cam)
-        res.pack(fill="x", pady=(6, 0))
-        ttk.Label(res, text="Capture:").pack(side="left")
+        opts = tk.Frame(cam, bg=CARD)
+        opts.pack(fill="x", pady=(10, 0))
+        left = tk.Frame(opts, bg=CARD)
+        left.pack(side="left")
+        ttk.Label(left, text="Capture size", style="Muted.TLabel").pack(anchor="w")
         self.res_var = tk.StringVar(
             value=f"{self.cfg.camera.width}x{self.cfg.camera.height}"
                   f" @ {self.cfg.camera.fps}")
-        combo = ttk.Combobox(res, textvariable=self.res_var, state="readonly",
-                             width=18,
+        combo = ttk.Combobox(left, textvariable=self.res_var, state="readonly",
+                             width=16,
                              values=["640x480 @ 30", "1280x720 @ 30",
                                      "1280x720 @ 60", "1920x1080 @ 30"])
         # The selection event, not a `command` option: ttk.Combobox rejects
         # that option, and the event fires for keyboard picks too.
         combo.bind("<<ComboboxSelected>>", self.on_resolution)
-        combo.pack(side="left")
+        combo.pack(anchor="w", pady=(4, 0))
 
-        # --- outputs --------------------------------------------------
-        out = ttk.LabelFrame(self.root, text="Game outputs", padding=10)
-        out.pack(fill="x", padx=12, pady=(8, 0))
+        right = tk.Frame(opts, bg=CARD)
+        right.pack(side="left", padx=(22, 0), anchor="n")
+        ttk.Label(right, text="Preview", style="Muted.TLabel").pack(anchor="w")
+        self.mirror_var = tk.BooleanVar(value=self.cfg.camera.mirror)
+        self._toggle_row(right, "Mirror the picture", self.mirror_var,
+                         self.on_mirror)
+
+        # --- game outputs + display, side by side ----------------------
+        # Stacked, the window came to 1170 px: taller than a 1080p screen.
+        # These two are short lists of toggles, so they share a row.
+        mid = tk.Frame(pad, bg=BG)
+        mid.pack(fill="x", pady=(12, 0))
+
+        out_card = self._section(mid, "Game outputs")
+        out_card.pack(side="left", fill="both", expand=True)
+        out = out_card.body
         self.game_link_var = tk.BooleanVar(value=self.cfg.game_link.enabled)
         self.udp_var = tk.BooleanVar(value=self.cfg.udp_json.enabled)
         self.mouse_var = tk.BooleanVar(value=self.cfg.mouse.enabled)
-        for text, var in (("TrackIR games (ETS2, MSFS, DCS, ...)", self.game_link_var),
-                          ("Minecraft (UDP)", self.udp_var),
-                          ("Mouse look (any game) - F9 to arm", self.mouse_var)):
-            ttk.Checkbutton(out, text=text, variable=var,
-                            command=self.on_outputs).pack(anchor="w")
+        for text, var, hint in (
+                ("ETS2, MSFS, DCS, X-Plane", self.game_link_var,
+                 "head tracking"),
+                ("Minecraft", self.udp_var, "needs the mod"),
+                ("Any other game", self.mouse_var, "F9 to arm")):
+            row = tk.Frame(out, bg=CARD)
+            row.pack(fill="x", pady=3)
+            ttk.Label(row, text=text, style="TLabel").pack(side="left")
+            ttk.Label(row, text=hint, style="Muted.TLabel").pack(
+                side="left", padx=(8, 0))
+            Toggle(row, var, command=self.on_outputs).canvas.pack(side="right")
 
-        # --- display --------------------------------------------------
-        disp = ttk.LabelFrame(self.root, text="Display", padding=10)
-        disp.pack(fill="x", padx=12, pady=(8, 0))
+        disp_card = self._section(mid, "Display")
+        disp_card.pack(side="left", fill="both", expand=True, padx=(12, 0))
         self.compact_var = tk.BooleanVar(value=self.cfg.overlay.compact)
         self.mesh_var = tk.BooleanVar(value=self.cfg.overlay.show_mesh)
         self.top_most_var = tk.BooleanVar(value=self.cfg.overlay.top_most)
-        for text, var in (("Compact HUD (small numbers-only panel)", self.compact_var),
-                          ("Show face mesh", self.mesh_var),
-                          ("Keep HUD above other windows", self.top_most_var)):
-            ttk.Checkbutton(disp, text=text, variable=var,
-                            command=self.on_display).pack(anchor="w")
+        for text, var in (("Compact HUD", self.compact_var),
+                          ("Face mesh", self.mesh_var),
+                          ("Always on top", self.top_most_var)):
+            self._toggle_row(disp_card.body, text, var, self.on_display)
 
         # --- feel ------------------------------------------------------
-        feel = ttk.LabelFrame(self.root, text="Feel", padding=10)
-        feel.pack(fill="x", padx=12, pady=(8, 0))
-        grid = ttk.Frame(feel)
+        feel_card = self._section(pad, "Feel")
+        feel_card.pack(fill="x", pady=(12, 0))
+        feel = feel_card.body
+        grid = tk.Frame(feel, bg=CARD)
         grid.pack(fill="x")
-        ttk.Label(grid, text="Left / right range").grid(row=0, column=0, sticky="w")
+
+        def slider_row(row, label, variable, command, value_label,
+                       from_, to):
+            ttk.Label(grid, text=label, style="Muted.TLabel").grid(
+                row=row, column=0, sticky="w", pady=4)
+            ttk.Scale(grid, from_=from_, to=to, orient="horizontal",
+                      variable=variable, length=180,
+                      command=command).grid(row=row, column=1, sticky="w",
+                                            padx=(12, 10), pady=4)
+            value_label.grid(row=row, column=2, sticky="w", pady=4)
+
         self.yaw_var = tk.DoubleVar(value=self.cfg.pose.yaw_range)
-        ttk.Scale(grid, from_=15, to=90, orient="horizontal", variable=self.yaw_var,
-                  length=200, command=self.on_ranges).grid(row=0, column=1, sticky="w")
-        self.yaw_label = ttk.Label(grid, text="")
-        self.yaw_label.grid(row=0, column=2, padx=8)
-
-        ttk.Label(grid, text="Up / down range").grid(row=1, column=0, sticky="w", pady=4)
+        self.yaw_label = ttk.Label(grid, text="", style="Value.TLabel")
+        slider_row(0, "Left / right", self.yaw_var, self.on_ranges,
+                   self.yaw_label, 15, 90)
         self.pitch_var = tk.DoubleVar(value=self.cfg.pose.pitch_range)
-        ttk.Scale(grid, from_=10, to=70, orient="horizontal",
-                  variable=self.pitch_var, length=200,
-                  command=self.on_ranges).grid(row=1, column=1, sticky="w", pady=4)
-        self.pitch_label = ttk.Label(grid, text="")
-        self.pitch_label.grid(row=1, column=2, padx=8, pady=4)
-
-        smooth = ttk.Frame(feel)
-        smooth.pack(fill="x", pady=(8, 0))
-        ttk.Label(smooth, text="Smoothing").pack(side="left")
+        self.pitch_label = ttk.Label(grid, text="", style="Value.TLabel")
+        slider_row(1, "Up / down", self.pitch_var, self.on_ranges,
+                   self.pitch_label, 10, 70)
         self.cutoff_var = tk.DoubleVar(value=self.cfg.filter.min_cutoff)
-        ttk.Scale(smooth, from_=0.2, to=5.0, orient="horizontal",
-                  variable=self.cutoff_var, length=200,
-                  command=self.on_smoothing).pack(side="left", padx=8)
-        self.cutoff_label = ttk.Label(smooth, text="")
-        self.cutoff_label.pack(side="left")
+        self.cutoff_label = ttk.Label(grid, text="", style="Value.TLabel")
+        slider_row(2, "Smoothing", self.cutoff_var, self.on_smoothing,
+                   self.cutoff_label, 0.2, 5.0)
 
-        footer = ttk.Frame(self.root, padding=(12, 10, 12, 12))
-        footer.pack(fill="x")
-        self.detail_label = ttk.Label(footer, text="", foreground="#666",
-                                      wraplength=480, justify="left")
-        self.detail_label.pack(fill="x")
-        ttk.Label(footer, text="C calibrate   R recentre   H help   Q quit   "
-                               "F full/compact", foreground="#888").pack(
-            anchor="w", pady=(8, 0))
+        # --- footer ----------------------------------------------------
+        self.detail_label = ttk.Label(pad, text="", style="Muted.TLabel",
+                                      wraplength=660, justify="left")
+        self.detail_label.pack(fill="x", pady=(14, 0))
+        keys = tk.Frame(pad, bg=BG)
+        keys.pack(fill="x", pady=(10, 0))
+        for i, (key, what) in enumerate((("C", "calibrate"), ("R", "recentre"),
+                                         ("H", "help"), ("F", "compact"),
+                                         ("Q", "quit"))):
+            if i:
+                ttk.Label(keys, text="   ", style="Muted.TLabel").pack(side="left")
+            chip = tk.Frame(keys, bg=CARD_HI, highlightthickness=1,
+                            highlightbackground=LINE)
+            chip.pack(side="left")
+            tk.Label(chip, text=key, bg=CARD_HI, fg=TEXT,
+                     font=("Consolas", 9, "bold"), padx=5, pady=1).pack(side="left")
+            tk.Label(chip, text=what, bg=CARD_HI, fg=MUTED,
+                     font=FONT_SMALL, padx=4, pady=1).pack(side="left")
 
-    # ==================================================================
     # camera list
     def _load_cameras(self) -> None:
         from .cameras import list_devices
@@ -681,9 +757,9 @@ class TrackerWindow:
         state = "normal" if running else "disabled"
         self.recentre_button.config(state=state)
         self.calibrate_button.config(state=state)
-        self.status_label.config(text=self.controller.status)
-        colour = "#1a7f37" if running else ("#b35900" if self.controller._error else "#444")
-        self.status_label.config(foreground=colour)
+        errored = bool(self.controller._error)
+        tone = "warn" if errored else ("live" if running else "idle")
+        self.pill.set(self.controller.status, tone)
         self.detail_label.config(text=self.controller.detail)
         self._error = ""
 
