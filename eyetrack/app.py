@@ -8,6 +8,7 @@ from pathlib import Path
 
 import cv2
 
+from .autodetect import CameraProbe
 from .calibrate import Calibration, CalibrationWizard
 from .config import Config
 from .filters import PoseFilter
@@ -16,6 +17,8 @@ from .outputs import build_outputs
 from .pose import HeadPose, HeadPoseEstimator
 
 HELP_STATUS = "keys:  C calibrate   R recenter   Q quit"
+SETUP_STATUS = ("first run - C skips setup and starts tracking anyway"
+                "   SPACE captures")
 
 
 def _prompt_for_camera(cfg: Config, config_path: Path) -> None:
@@ -106,12 +109,55 @@ def _apply_gains(cfg: Config, pose: dict[str, float]) -> dict[str, float]:
     }
 
 
+def _auto_detect(cfg: Config, config_path: Path, estimator) -> CameraProbe | None:
+    """Find a camera that actually shows a face, and remember it.
+
+    Deliberately conservative about what counts: a virtual camera that
+    opens but returns nothing usable would otherwise win, and the user
+    would land in the wizard with no image to calibrate against.
+    """
+    from .autodetect import detect_camera
+
+    def detect(frame):
+        return estimator.process(frame, int(time.monotonic() * 1000)).detected
+
+    found = detect_camera(
+        face_detector=detect,
+        prefer_name=cfg.camera.device_name,
+        width=cfg.camera.width, height=cfg.camera.height, fps=cfg.camera.fps,
+        on_progress=lambda d: print(f"[setup] trying camera {d}"))
+    if found is None:
+        print("[setup] no camera found - open the app's camera settings "
+              "or run --pick-camera to choose one manually")
+        return None
+
+    cfg.camera.index = found.index
+    if found.name:
+        cfg.camera.device_name = found.name
+    kind = "a face" if found.face else "frames, but no face yet"
+    print(f"[setup] using '{found.name or found.index}' - {kind} "
+          f"({found.seconds:.1f}s)")
+    try:
+        cfg.save(config_path)
+    except OSError as exc:
+        print(f"[eyetrack] warning: could not save config: {exc}")
+    return found
+
+
 def run(cfg: Config, *, config_path: Path, start_wizard: bool = False,
-        recenter_on_start: bool = False, pick_camera: bool = False) -> int:
-    if pick_camera:
+        recenter_on_start: bool = False, pick_camera: bool = False,
+        first_run: bool = False) -> int:
+    estimator = HeadPoseEstimator()
+    if first_run:
+        # Before the camera is opened: picking the right index first avoids
+        # failing on a camera that was never going to work.
+        _auto_detect(cfg, config_path, estimator)
+        # Always calibrate on a fresh install - the default pose mapping is
+        # a guess, and one wrong guess means every game looks wrong.
+        start_wizard = True
+    elif pick_camera:
         _prompt_for_camera(cfg, config_path)
     print("[eyetrack] starting camera", cfg.camera.index)
-    estimator = HeadPoseEstimator()
     cap = open_camera(cfg)
 
     calib = Calibration.load()
@@ -136,6 +182,8 @@ def run(cfg: Config, *, config_path: Path, start_wizard: bool = False,
                       roll_range=cfg.pose.roll_range) if cfg.overlay.enabled else None
     wizard = CalibrationWizard(cfg.pose.yaw_range, cfg.pose.pitch_range,
                                cfg.pose.reference_distance_cm) if start_wizard else None
+    if wizard is not None:
+        status = SETUP_STATUS if first_run else "calibration started"
 
     last_raw: HeadPose | None = None
     last_out = {"yaw": 0.0, "pitch": 0.0, "roll": 0.0, "x": 0.0, "y": 0.0, "z": 0.0}
@@ -190,12 +238,22 @@ def run(cfg: Config, *, config_path: Path, start_wizard: bool = False,
                 key = overlay.draw(frame, pose, last_out, tracking, fps_ema,
                                    cfg.camera.mirror, wizard, status_line)
                 status = HELP_STATUS
+                # On a fresh install ESC means "skip setup and just track":
+                # quitting outright leaves someone who only wanted to try it
+                # with no camera chosen and no calibration at all.
+                if key == 27 and first_run and wizard is not None:
+                    wizard.cancel()
+                    first_run = False
+                    status = "setup skipped - press C any time to calibrate"
+                    print("[setup] skipped calibration; tracking anyway "
+                          "(press C to redo)")
+                    continue
                 if overlay.window_closed() or key in (ord("q"), 27):
                     break
                 if key == ord("c"):
                     wizard = CalibrationWizard(cfg.pose.yaw_range, cfg.pose.pitch_range,
                                                cfg.pose.reference_distance_cm)
-                    status = "calibration started"
+                    status = SETUP_STATUS if first_run else "calibration started"
                 elif key == ord("r"):
                     if last_raw is not None:
                         calib.center_from(last_raw)

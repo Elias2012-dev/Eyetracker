@@ -51,6 +51,13 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
                    default=False,
                    help="list every camera Windows reports and choose one "
                         "interactively (saves it for next time)")
+    p.add_argument("--first-run", dest="first_run", action="store_true",
+                   default=False,
+                   help="redo the guided setup: find a camera automatically, "
+                        "then walk through calibration")
+    p.add_argument("--no-first-run", dest="first_run", action="store_false",
+                   default=None,
+                   help="never auto-run setup, even on a fresh config")
     p.add_argument("--camera-name", type=str, metavar="NAME",
                    help="select camera by device name substring "
                         "(e.g. \"Iriun\", \"DroidCam\", \"iPhone\", \"OBS\")")
@@ -167,17 +174,27 @@ def main(argv: list[str] | None = None) -> int:
     if args.freetrack:
         print("[eyetrack] note: --freetrack is now --game-link (same built-in output)")
         cfg.game_link.enabled, changed = True, True
-    if changed or not args.config.exists():
+    first_launch = not args.config.exists()
+    if changed or first_launch:
         try:
             cfg.save(args.config)
         except OSError as exc:
             print(f"[eyetrack] warning: could not save config: {exc}")
 
     from .app import run
+    # A genuine first launch gets the guided setup for free: find a camera
+    # that works, then calibrate. --first-run forces it back on for someone
+    # who already has a config (wrong camera, or never calibrated);
+    # --no-first-run opts out, for unattended launches where a prompt
+    # nobody answers would just look like a hang.
+    setup = args.first_run is not False and (first_launch or args.first_run)
+    if setup:
+        print("[setup] first run - finding a camera and setting up calibration.")
     return run(cfg, config_path=args.config,
                start_wizard=args.calibrate,
                recenter_on_start=args.recenter_on_start,
-               pick_camera=args.pick_camera)
+               pick_camera=args.pick_camera,
+               first_run=setup)
 
 
 if __name__ == "__main__":

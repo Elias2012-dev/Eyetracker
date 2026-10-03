@@ -38,7 +38,8 @@ There is no installer. You download one file and run it.
    > **First launch takes a few seconds** — it unpacks itself into a temp
    > folder. A console window may flash past; that's normal.
 
-4. **Pick your camera** if you have more than one:
+4. **Pick your camera** if you have more than one (first runs do this
+   for you, but you can do it by hand at any time):
 
    ```
    Eyetracker.exe --pick-camera
@@ -47,10 +48,20 @@ There is no installer. You download one file and run it.
    It lists every camera Windows reports. Type a number, or part of a
    name. The choice is saved, so you only do this once.
 
-5. **Calibrate.** Click the window and press `C`, then follow the prompts:
-   look centre, left, right, up, down — `SPACE` to capture each pose,
-   `ESC` to cancel. Takes about 30 seconds and makes everything feel
-   right afterwards.
+5. **The first run sets itself up.** The exe works out which camera to use
+   — it tries each one Windows reports and prefers one that actually shows
+   a face rather than one that merely opens — then starts the calibration
+   wizard by itself. Follow the prompts: look centre, left, right, up,
+   down, pressing `SPACE` to capture each pose. About 30 seconds, and it
+   makes everything feel right afterwards.
+
+   Press `ESC` to skip it and just start tracking; press `C` later to
+   calibrate properly. To redo the whole thing (wrong camera, or you want
+   to start over):
+
+   ```
+   Eyetracker.exe --first-run
+   ```
 
 6. **Start your game** with the tracker already running. The game loads
    the tracker's DLL; it does not need to know anything about it.
