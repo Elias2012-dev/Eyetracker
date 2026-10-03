@@ -1,11 +1,21 @@
 """Generate the mod icon used by Modrinth, CurseForge and Fabric.
 
-Both platforms want a square 128x128 PNG. Modrinth renders it at 32px in
-sits listings, so the mark has to survive being shrunk to a thumbnail:
-no text, one silhouette, two flat colours, high contrast.
+Two sizes, because the platforms disagree:
 
-Drawn at 8x and downsampled, because PIL's curves are aliased at 128px and
-the whole point is a clean edge.
+* **Modrinth** scales whatever you give it and renders the mark at 32px in
+  project listings, so it has to survive being shrunk: no text, one
+  silhouette, two flat colours, high contrast.
+* **CurseForge** will not scale *up*. Its submission guide is explicit:
+  "at least minimum 400*400 px (1:1 scale) .png file. Anything larger will
+  be downscaled". A 128px icon is rejected there, which is why the upload
+  copy is 512.
+* **Fabric** shows the icon in the mod list; 128 is the conventional size
+  and keeps the jar small.
+
+Both files are the same drawing at different resolutions, rendered from one
+description so they cannot drift apart.
+
+Drawn at 8x and downsampled, because the curves alias badly at small sizes.
 
 Run: python tools/make_mod_icon.py
 """
@@ -16,11 +26,13 @@ import pathlib
 from PIL import Image, ImageChops, ImageDraw
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-OUT = ROOT / "minecraft-mod" / "src" / "main" / "resources" / "assets" / "eyetrack" / "icon.png"
 
-SIZE = 128
+# (size, path) - the in-jar copy and the platform-upload copy.
+MOD_ICON = (128, ROOT / "minecraft-mod" / "src" / "main" / "resources"
+            / "assets" / "eyetrack" / "icon.png")
+UPLOAD_ICON = (512, ROOT / "docs" / "mod-icon-512.png")
+
 SS = 8                      # supersampling factor
-S = SIZE * SS
 
 # The app's own palette (see eyetrack/theme.py) so the icon matches the HUD.
 BG_OUTER = (24, 15, 18)    # #180F12
@@ -33,7 +45,8 @@ def _lerp(a: tuple[int, int, int], b: tuple[int, int, int], t: float):
     return tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
 
 
-def build() -> Image.Image:
+def build(size: int = 128) -> Image.Image:
+    S = size * SS
     img = Image.new("RGB", (S, S), BG_OUTER)
     d = ImageDraw.Draw(img)
 
@@ -92,26 +105,27 @@ def build() -> Image.Image:
     # The target is in *supersampled* pixels: cropped is SS times the final
     # size, so scaling against an unsupersampled target shrank the mark to
     # an eighth of the tile.
-    fit = int(SIZE * 0.84 * SS)
+    fit = int(size * 0.84 * SS)
     scale = min(fit / cropped.width, fit / cropped.height)
-    size = (max(1, round(cropped.width * scale)),
-            max(1, round(cropped.height * scale)))
-    final = cropped.resize(size, Image.LANCZOS)
-    final_alpha = cropped_alpha.resize(size, Image.LANCZOS)
+    scaled = (max(1, round(cropped.width * scale)),
+              max(1, round(cropped.height * scale)))
+    final = cropped.resize(scaled, Image.LANCZOS)
+    final_alpha = cropped_alpha.resize(scaled, Image.LANCZOS)
 
     # Paste through the alpha so the background gradient shows through the
     # gaps; pasting the opaque layer would stamp a black rectangle.
     img.paste(final, ((S - final.width) // 2, (S - final.height) // 2),
               final_alpha)
-    return img.resize((SIZE, SIZE), Image.LANCZOS)
+    return img.resize((size, size), Image.LANCZOS)
 
 
 def main() -> None:
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    img = build()
-    img.save(OUT, "PNG", optimize=True)
-    print(f"{OUT.relative_to(ROOT)}  {img.size[0]}x{img.size[1]}  "
-          f"{OUT.stat().st_size} bytes")
+    for size, path in (MOD_ICON, UPLOAD_ICON):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        img = build(size)
+        img.save(path, "PNG", optimize=True)
+        print(f"{path.relative_to(ROOT)}  {img.size[0]}x{img.size[1]}  "
+              f"{path.stat().st_size} bytes")
 
 
 if __name__ == "__main__":

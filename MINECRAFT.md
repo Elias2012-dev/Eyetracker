@@ -102,8 +102,16 @@ Full guide: [INSTALL.md](INSTALL.md)
 
 ## Publishing the mod
 
-`minecraft-mod/src/main/resources/assets/eyetrack/icon.png` is the icon for
-Modrinth and CurseForge - a 128x128 PNG, which is what both platforms
-require. `fabric.mod.json` points at the same file so the mod list shows it
-too. Regenerate it with `python tools/make_mod_icon.py`; `tests/test_icon.py`
-checks the size, centring, symmetry and palette.
+Two icons, because the platforms disagree:
+
+| File | Use | Why |
+|---|---|---|
+| [`docs/mod-icon-512.png`](docs/mod-icon-512.png) | **upload this to Modrinth and CurseForge** | CurseForge's submission guide requires "at least minimum 400*400 px" and will not scale up; Modrinth scales down for you |
+| [`minecraft-mod/src/main/resources/assets/eyetrack/icon.png`](minecraft-mod/src/main/resources/assets/eyetrack/icon.png) | ships inside the jar | what Fabric shows in the mod list; 128x128 is conventional and keeps the jar small |
+
+Both are the same drawing at two resolutions, generated from one description
+so they cannot drift apart. Regenerate with `python tools/make_mod_icon.py`;
+`tests/test_icon.py` checks both sizes, plus centring, symmetry, contrast
+and palette.
+
+![mod icon](docs/mod-icon-512.png)

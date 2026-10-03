@@ -17,6 +17,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 ICON = REPO / "minecraft-mod/src/main/resources/assets/eyetrack/icon.png"
+UPLOAD = REPO / "docs/mod-icon-512.png"
 MOD_JSON = REPO / "minecraft-mod/src/main/resources/fabric.mod.json"
 
 
@@ -88,9 +89,41 @@ def test_the_icon_exists():
 
 
 def test_it_is_a_square_128_png(icon):
-    """Both platforms reject anything else."""
+    """Fabric's mod-list copy is the conventional 128 square."""
     w, h, _ = icon
     assert (w, h) == (128, 128), f"expected 128x128, got {w}x{h}"
+
+
+def test_the_upload_copy_meets_the_curseforge_minimum():
+    """CurseForge will not scale up.
+
+    Its submission guide: "This should be at least minimum 400*400 px
+    (1:1 scale) .png file. Anything larger will be downscaled". Shipping
+    the 128px jar icon there gets the submission rejected.
+    """
+    assert UPLOAD.exists(), (
+        "docs/mod-icon-512.png is the CurseForge/Modrinth upload copy")
+    w, h, _ = read_png(UPLOAD)
+    assert w >= 400 and h >= 400, f"CurseForge needs 400x400+, got {w}x{h}"
+    assert w == h, "must be square (1:1)"
+
+
+def test_both_icons_are_the_same_drawing():
+    """One description, two resolutions - they must not drift apart."""
+    (w1, h1, r1), (w2, h2, r2) = read_png(ICON), read_png(UPLOAD)
+    assert (w1, h1) == (128, 128) and (w2, h2) == (512, 512)
+    # Both must be centred the same way: same relative margins.
+    def margins(rows, n):
+        lit = [(x, y) for y, row in enumerate(rows) for x in range(n)
+               if sum(row[x * 3:x * 3 + 3]) > 200]
+        xs = [p[0] for p in lit]
+        ys = [p[1] for p in lit]
+        return (min(xs) / n, (n - 1 - max(xs)) / n,
+                min(ys) / n, (n - 1 - max(ys)) / n)
+    a = margins(pixels(w1, h1, r1), w1)
+    b = margins(pixels(w2, h2, r2), w2)
+    assert max(abs(a[i] - b[i]) for i in range(4)) < 0.02, (
+        f"the two sizes are laid out differently: {a} vs {b}")
 
 
 def test_it_is_small_enough_to_upload(icon):
