@@ -1,4 +1,4 @@
-package dev.freebuff.eyetrack.client;
+package dev.eyetrack.client;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;

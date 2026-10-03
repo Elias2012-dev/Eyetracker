@@ -1,4 +1,4 @@
-package dev.freebuff.eyetrack.client;
+package dev.eyetrack.client;
 
 import org.junit.jupiter.api.Test;
 

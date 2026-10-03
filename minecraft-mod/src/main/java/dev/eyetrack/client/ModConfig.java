@@ -1,4 +1,4 @@
-package dev.freebuff.eyetrack.client;
+package dev.eyetrack.client;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -8,7 +8,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Config file: config/freebuff_eyetrack.json (created with defaults on first run). */
+/** Config file: config/eyetrack.json (created with defaults on first run). */
 public class ModConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -31,7 +31,7 @@ public class ModConfig {
     public boolean invertPitch = false;
 
     public static Path path() {
-        return FabricLoader.getInstance().getConfigDir().resolve("freebuff_eyetrack.json");
+        return FabricLoader.getInstance().getConfigDir().resolve("eyetrack.json");
     }
 
     public static ModConfig load() {

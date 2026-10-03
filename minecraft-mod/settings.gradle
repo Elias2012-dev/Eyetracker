@@ -15,4 +15,4 @@ plugins {
 }
 
 // Should match your modid
-rootProject.name = 'freebuff-eyetrack'
+rootProject.name = 'eyetrack'

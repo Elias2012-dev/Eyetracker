@@ -89,7 +89,7 @@ def test_readme_is_linked_from_the_install_guide():
 def test_download_links_point_at_real_release_assets():
     """The guide's download URLs must match what the releases actually serve."""
     for name, expected in (("Eyetracker.exe", True),
-                           ("freebuff-eyetrack-1.0.0.jar", True)):
+                           ("eyetrack-1.0.0.jar", True)):
         for doc in (README.read_text(encoding="utf-8"),
                     INSTALL.read_text(encoding="utf-8")):
             if f"download/{name}" in doc:

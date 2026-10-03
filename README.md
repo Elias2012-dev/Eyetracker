@@ -66,7 +66,7 @@ away from where you left off. There is nothing to confirm or submit.
 | ETS2 / ATS | *Options → Gameplay → TrackIR* on |
 | Farming Simulator 25 / 22 | *Options → General → head tracking* on |
 | MSFS, DCS, X-Plane 12, War Thunder, ACC, DayZ, IL-2 | enable head tracking in the game; it loads our DLL from the standard registry key |
-| Minecraft 26.2 | drop [`freebuff-eyetrack-1.0.0.jar`](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/freebuff-eyetrack-1.0.0.jar) into `mods` (needs Fabric Loader + Fabric API), then `H` toggles tracking, `J` recentres |
+| Minecraft 26.2 | drop [`eyetrack-1.0.0.jar`](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/eyetrack-1.0.0.jar) into `mods` (needs Fabric Loader + Fabric API), then `H` toggles tracking, `J` recentres |
 | Anything with mouse-look | `Eyetracker.exe --mouse`, then press `F9` to arm |
 
 </details>
@@ -124,7 +124,7 @@ Everything is on the
 | File | What it is |
 |---|---|
 | [**Eyetracker.exe**](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/Eyetracker.exe) | the whole tracker, self-contained (~113 MB) — no Python, no terminal, no pip |
-| [**freebuff-eyetrack-1.0.0.jar**](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/freebuff-eyetrack-1.0.0.jar) | the Minecraft 26.2 mod (only needed for Minecraft) |
+| [**eyetrack-1.0.0.jar**](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/eyetrack-1.0.0.jar) | the Minecraft 26.2 mod (only needed for Minecraft) |
 
 The exe's flags still work from a shortcut's *Target* box or a script. With no
 console the same text appears in a dialog (set `EYE_TRACKER_NO_DIALOG=1` to
@@ -278,7 +278,7 @@ Games without TrackIR support are covered by **mouse emulation** — see
    gradlew build
    ```
 
-   The jar lands in `minecraft-mod/build/libs/freebuff-eyetrack-1.0.0.jar`.
+   The jar lands in `minecraft-mod/build/libs/eyetrack-1.0.0.jar`.
 
 3. **Install**: put the jar plus [Fabric Loader](https://fabricmc.net/use/)
    (≥ 0.19) and Fabric API for 26.2 into your `mods` folder.
@@ -448,7 +448,7 @@ saved preference.
 | `overlay.compact` | `false` | numbers-only HUD instead of the camera view |
 | `overlay.top_most` | `false` | keep the HUD above other windows |
 
-**`config/freebuff_eyetrack.json`** (Minecraft mod):
+**`config/eyetrack.json`** (Minecraft mod):
 
 | Key | Default | Meaning |
 |---|---|---|

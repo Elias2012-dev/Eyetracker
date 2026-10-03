@@ -1,6 +1,6 @@
-package dev.freebuff.eyetrack.mixin;
+package dev.eyetrack.mixin;
 
-import dev.freebuff.eyetrack.client.EyeTrackClient;
+import dev.eyetrack.client.EyeTrackClient;
 import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

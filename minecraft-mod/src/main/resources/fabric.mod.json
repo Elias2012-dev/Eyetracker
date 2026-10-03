@@ -1,21 +1,21 @@
 {
 	"schemaVersion": 1,
-	"id": "freebuff_eyetrack",
+	"id": "eyetrack",
 	"version": "${version}",
-	"name": "Freebuff EyeTrack",
-	"description": "Pairs with the Freebuff EyeTrack webcam tracker: smooth head-controlled camera on UDP port 47777.",
+	"name": "Eyetracker",
+	"description": "Pairs with the Eyetracker webcam tracker: smooth head-controlled camera on UDP port 47777.",
 	"authors": [
-		"Freebuff"
+		"Elias2012-dev"
 	],
 	"license": "MIT",
 	"environment": "client",
 	"entrypoints": {
 		"client": [
-			"dev.freebuff.eyetrack.client.EyeTrackClient"
+			"dev.eyetrack.client.EyeTrackClient"
 		]
 	},
 	"mixins": [
-		"freebuff_eyetrack.mixins.json"
+		"eyetrack.mixins.json"
 	],
 	"depends": {
 		"fabricloader": ">=0.19.0",

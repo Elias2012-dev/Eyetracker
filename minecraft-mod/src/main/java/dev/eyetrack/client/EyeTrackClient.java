@@ -1,4 +1,4 @@
-package dev.freebuff.eyetrack.client;
+package dev.eyetrack.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
@@ -19,7 +19,7 @@ import org.lwjgl.glfw.GLFW;
  * Mouse-look keeps working whenever tracking is disabled or the face is lost.</p>
  */
 public class EyeTrackClient implements ClientModInitializer {
-    public static final String MOD_ID = "freebuff_eyetrack";
+    public static final String MOD_ID = "eyetrack";
 
     private static ModConfig config;
     private static TrackerReceiver receiver;
@@ -40,11 +40,11 @@ public class EyeTrackClient implements ClientModInitializer {
                 + config.port + " (" + config.bindAddress + ")");
 
         toggleKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.freebuff_eyetrack.toggle",
+                "key.eyetrack.toggle",
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_H,
                 KeyMapping.Category.MISC));
         recenterKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.freebuff_eyetrack.recenter",
+                "key.eyetrack.recenter",
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_J,
                 KeyMapping.Category.MISC));
 

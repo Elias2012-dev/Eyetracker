@@ -1,6 +1,6 @@
 {
 	"required": true,
-	"package": "dev.freebuff.eyetrack.mixin",
+	"package": "dev.eyetrack.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
 		"MinecraftMixin"

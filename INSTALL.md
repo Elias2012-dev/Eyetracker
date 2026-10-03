@@ -186,8 +186,15 @@ reliable.
 
 Needs **Fabric Loader** and **Fabric API** installed in Minecraft first.
 
+> **Already installed the old mod?** Delete `freebuff-eyetrack-1.0.0.jar`
+> from `mods` before adding the new one. Fabric identifies mods by id, and
+> the id changed to `eyetrack`, so leaving the old jar in place loads two
+> copies of the same mod. Your old settings stay in
+> `config/freebuff_eyetrack.json`; move them to `config/eyetrack.json` to
+> keep your tuning.
+
 1. Download
-   [`freebuff-eyetrack-1.0.0.jar`](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/freebuff-eyetrack-1.0.0.jar).
+   [`eyetrack-1.0.0.jar`](https://github.com/Elias2012-dev/Eyetracker/releases/latest/download/eyetrack-1.0.0.jar).
 
 2. Drop it in your `mods` folder:
 
@@ -213,7 +220,7 @@ Needs **Fabric Loader** and **Fabric API** installed in Minecraft first.
 ### Minecraft tuning
 
 Feels wrong? Edit
-`config/freebuff_eyetrack.json` in your Minecraft folder:
+`config/eyetrack.json` in your Minecraft folder:
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -303,7 +310,7 @@ cd minecraft-mod
 gradlew.bat build          # Gradle downloads a JDK 25 for itself
 ```
 
-Output: `minecraft-mod/build/libs/freebuff-eyetrack-1.0.0.jar`
+Output: `minecraft-mod/build/libs/eyetrack-1.0.0.jar`
 
 ### Where your data lives
 

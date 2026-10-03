@@ -70,7 +70,7 @@ PRESETS: dict[str, GamePreset] = {p.key: p for p in (
         notes=(
             "Build the mod once: cd minecraft-mod && gradlew build",
             "In game: H toggles head tracking, J recentres.",
-            "Sensitivity / curve / invert live in config/freebuff_eyetrack.json.",
+            "Sensitivity / curve / invert live in config/eyetrack.json.",
         ),
     ),
     _trackir("ets2", "Euro Truck Simulator 2",
