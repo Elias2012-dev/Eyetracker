@@ -195,8 +195,30 @@ class TrackerWindow:
         self._load_cameras()
         self._sync_from_config()
         self._preview_start()
+        self._center_on_screen()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.after(TICK_MS, self._tick)
+
+    def _center_on_screen(self) -> None:
+        """Put the window somewhere it is actually visible.
+
+        Tk's default placement is the top-left of the work area, which is
+        fine for a short dialog and useless for this one: at ~950 px tall
+        the bottom half lands off the bottom of a 1080p screen. Measured on
+        the packaged exe, it opened with only the top 200 px showing.
+        """
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+        if width <= 1 or height <= 1 or screen_w <= 1 or screen_h <= 1:
+            return               # no usable geometry yet; leave Tk's default
+        x = max(0, (screen_w - width) // 2)
+        # Bias upward: the tracker HUD opens near the top of the screen and
+        # an always-on-top HUD would otherwise land on top of this window.
+        y = max(0, min((screen_h - height) // 2, (screen_h - height) // 4))
+        self.root.geometry(f"+{x}+{y}")
 
     # ==================================================================
     # layout

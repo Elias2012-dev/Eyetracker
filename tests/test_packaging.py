@@ -138,3 +138,20 @@ def test_spec_builds_a_windowed_exe():
     spec = SPEC.read_text(encoding="utf-8")
     assert 'name="Eyetracker"' in spec
     assert "console=False" in spec, "the exe must not open a terminal window"
+
+
+def test_spec_bundles_tkinter():
+    """The settings window is Tk, so tkinter has to be in the bundle.
+
+    It used to be in `excludes`, left over from when the overlay was the
+    whole UI. The result was an exe that built, passed the --paths smoke
+    test, and then died with ModuleNotFoundError on the first double-click -
+    the tests all passed and the program was unusable.
+    """
+    spec = SPEC.read_text(encoding="utf-8")
+    excludes_line = next(line for line in spec.splitlines()
+                         if line.startswith("excludes ="))
+    assert "tkinter" not in excludes_line, (
+        "excluding tkinter means the packaged exe cannot open its window")
+    assert '"tkinter"' in spec, "tkinter should be an explicit hidden import"
+    assert '"tkinter.ttk"' in spec, "the settings window uses ttk widgets"

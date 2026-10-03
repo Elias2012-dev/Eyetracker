@@ -66,6 +66,12 @@ hiddenimports = list(mediapipe_hidden) + [
     "pygrabber.dshow_graph",
     "comtypes",
     "comtypes.client",
+    # The settings window. PyInstaller's tkinter hook also pulls in the Tcl
+    # and Tk data files, without which the import fails in the bundle even
+    # though it works in the venv.
+    "tkinter",
+    "tkinter.ttk",
+    "_tkinter",
 ]
 for pkg in ("pygrabber", "comtypes"):
     _bin, _data, _hidden = collect_all(pkg)
@@ -74,7 +80,10 @@ for pkg in ("pygrabber", "comtypes"):
 # Nothing here uses these; dropping them keeps the bundle smaller.
 # Do NOT exclude matplotlib: mediapipe.tasks.python.vision.drawing_utils
 # imports it, so the face landmarker fails to load without it.
-excludes = ["tkinter", "IPython", "pytest", "sphinx", "notebook"]
+# Do NOT exclude tkinter: the settings window is Tk. Excluding it produced
+# an exe that built, passed --paths, and then died with ModuleNotFoundError
+# the moment somebody double-clicked it.
+excludes = ["IPython", "pytest", "sphinx", "notebook"]
 
 a = Analysis(
     [str(ROOT / "packaging" / "launcher.py")],
